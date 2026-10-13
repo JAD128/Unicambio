@@ -81,45 +81,10 @@ Proyecto_Unicambio/
 
 ---
 
-## Cómo ejecutar
 
-```bash
-# En el navegador (rápido para revisar la UI)
-flutter run -d chrome
 
-# En un emulador o dispositivo Android conectado
-flutter run
-```
 
----
 
-## Cómo probar
-
-```bash
-flutter analyze   # Revisa errores y advertencias  -> "No issues found!"
-flutter test      # Ejecuta las pruebas            -> "All tests passed!"
-```
-
-**Prueba manual sugerida:**
-1. Abre la app y observa la cuadrícula de artículos de ejemplo.
-2. Toca una tarjeta para abrir el **detalle**.
-3. Cambia entre las pestañas **Inicio**, **Favoritos** y **Mis artículos**.
-4. Pulsa el botón flotante **Publicar** para ver el formulario.
-
----
-
-## Subir a GitHub
-
-```bash
-git init
-git add .
-git commit -m "Primer avance UniCambio: interfaz visual en Flutter"
-git branch -M main
-git remote add origin https://github.com/TU_USUARIO/unicambio.git
-git push -u origin main
-```
-
----
 
 ## Notas
 
