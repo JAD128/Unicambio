@@ -100,6 +100,69 @@ class Articulo {
     this.esFavorito = false,
   });
 
+  /// Crea una copia del artículo cambiando solo los campos que se indiquen.
+  ///
+  /// Es útil para actualizar un artículo sin modificar el original, por ejemplo
+  /// al marcar/desmarcar favorito:
+  /// `articulo.copyWith(esFavorito: !articulo.esFavorito)`.
+  Articulo copyWith({
+    String? id,
+    String? titulo,
+    String? descripcion,
+    double? precio,
+    Categoria? categoria,
+    TipoPublicacion? tipo,
+    String? vendedor,
+    bool? esFavorito,
+  }) {
+    return Articulo(
+      id: id ?? this.id,
+      titulo: titulo ?? this.titulo,
+      descripcion: descripcion ?? this.descripcion,
+      precio: precio ?? this.precio,
+      categoria: categoria ?? this.categoria,
+      tipo: tipo ?? this.tipo,
+      vendedor: vendedor ?? this.vendedor,
+      esFavorito: esFavorito ?? this.esFavorito,
+    );
+  }
+
+  /// Convierte el artículo en un `Map` para guardarlo en SQLite (sqflite).
+  ///
+  /// sqflite no entiende objetos Dart ni `enum`, así que:
+  /// - Los enums (`categoria`, `tipo`) se guardan como texto con `.name`.
+  /// - Los booleanos no existen en SQLite; `esFavorito` se guarda como 0 o 1.
+  Map<String, Object?> toMap() {
+    return <String, Object?>{
+      'id': id,
+      'titulo': titulo,
+      'descripcion': descripcion,
+      'precio': precio,
+      'categoria': categoria.name,
+      'tipo': tipo.name,
+      'vendedor': vendedor,
+      'esFavorito': esFavorito ? 1 : 0,
+    };
+  }
+
+  /// Construye un [Articulo] a partir de una fila de la base de datos.
+  ///
+  /// Es la operación inversa de [toMap]: convierte los textos de los enums de
+  /// vuelta a sus valores y el entero 0/1 de vuelta a un `bool`.
+  factory Articulo.fromMap(Map<String, Object?> map) {
+    return Articulo(
+      id: map['id'] as String,
+      titulo: map['titulo'] as String,
+      descripcion: map['descripcion'] as String,
+      // SQLite puede devolver `int` o `double` para un campo REAL.
+      precio: (map['precio'] as num).toDouble(),
+      categoria: Categoria.values.byName(map['categoria'] as String),
+      tipo: TipoPublicacion.values.byName(map['tipo'] as String),
+      vendedor: map['vendedor'] as String,
+      esFavorito: (map['esFavorito'] as int) == 1,
+    );
+  }
+
   /// Devuelve el texto de precio listo para mostrar en pantalla.
   ///
   /// Reglas de presentación (solo visuales):
