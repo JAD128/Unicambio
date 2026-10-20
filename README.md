@@ -9,7 +9,8 @@ Documentación en README
 
 Aplicación Flutter para estudiantes universitarios que permite publicar
 artículos para vender, intercambiar o regalar. El proyecto tiene una interfaz
-de artículos, persistencia local SQLite y autenticación con Firebase Auth.
+de artículos, datos en la nube con Cloud Firestore y autenticación con Firebase
+Auth.
 
 ## Estado actual
 
@@ -19,11 +20,11 @@ de artículos, persistencia local SQLite y autenticación con Firebase Auth.
   popup de Firebase Auth).
 - **Sesión:** Firebase conserva la sesión entre reinicios y la app abre Inicio
   cuando detecta un usuario autenticado.
-- **Artículos:** publicaciones y favoritos se guardan en SQLite local
-  (`unicambio.db`) a través de `ArticulosProvider`. Los datos de ejemplo se
-  siembran solo la primera vez que se abre la app. Aún no se sincronizan con
-  la nube ni se asocian a la cuenta de Firebase.
-- **Pruebas:** 23 pruebas (repositorio con ffi, provider y widgets).
+- **Artículos:** publicaciones y favoritos se guardan en Cloud Firestore
+  (`ArticuloRepositorioNube`) a través de `ArticulosProvider`. La app arranca
+  **vacía** (sin datos de ejemplo) y los favoritos son **por usuario**.
+  Firestore sirve su caché local cuando no hay conexión.
+- **Pruebas:** 24 pruebas (repositorio con ffi, provider y widgets).
 
 ## Cómo funciona la autenticación
 
@@ -134,7 +135,7 @@ Para ejecutar en Android, conecta un dispositivo o inicia un emulador.
 
 1. Abre la pantalla de acceso y selecciona **Crear cuenta**.
 2. Ingresa nombre, correo y contraseña de 6 caracteres o más. Firebase creará
-   la cuenta y la app abrirá Inicio.
+   la cuenta y la app abrirá Inicio (vacío hasta que publiques algo).
 3. Pulsa el ícono **Cerrar sesión** en la barra superior.
 4. Inicia sesión con el mismo correo y contraseña.
 5. Cierra y vuelve a abrir la app para comprobar que Firebase restaura la
@@ -143,6 +144,9 @@ Para ejecutar en Android, conecta un dispositivo o inicia un emulador.
    correo para encontrar el enlace de restablecimiento.
 7. Pulsa **Continuar con Google** (requiere los pasos de Android descritos en
    `FIREBASE_SETUP.md`).
+8. Publica un artículo con el botón **Publicar**: aparecerá también en la
+   cuenta de otro usuario (Firestore). Marca favoritos en una cuenta y
+   comprueba que no aparecen en la otra.
 
 Las cuentas creadas se ven en Firebase Console, en **Authentication → Users**.
 
@@ -154,7 +158,7 @@ flutter test
 ```
 
 Al actualizar este README, las verificaciones reportaron **No issues
-found!** y **All tests passed!** (23 pruebas).
+found!** y **All tests passed!** (24 pruebas).
 
 ## Estructura relevante
 
@@ -182,13 +186,13 @@ test/
 - `firebase_core` para inicializar Firebase y `firebase_auth` para autenticación.
 - `google_sign_in` para obtener el token de Google en Android (en web se usa
   `signInWithPopup` de `firebase_auth`).
-- SQLite (`sqflite`) para la persistencia local de artículos.
+- Cloud Firestore (`cloud_firestore`) para los artículos y favoritos en la nube.
+- SQLite (`sqflite`) se conserva como implementación histórica y para sus
+  pruebas; la app usa Firestore.
 - Provider para el estado de artículos.
 
 ## Alcance pendiente
 
 - Asociar publicaciones a la cuenta autenticada y filtrar “Mis artículos” por
-  usuario.
-- Sincronizar artículos y favoritos con un backend en la nube.
-- Añadir verificación de correo y una pantalla completa de perfil, si se
-  requieren para el siguiente avance.
+  usuario (Avance 9).
+- Fotos reales de los artículos (Avance 8) y verificación de correo.

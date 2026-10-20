@@ -14,7 +14,7 @@ cada avance.
 ```bash
 flutter pub get   # tras tocar pubspec.yaml
 flutter analyze   # -> No issues found!
-flutter test      # -> All tests passed!  (23 pruebas)
+flutter test      # -> All tests passed!  (24 pruebas)
 ```
 
 No hay CI: `analyze` + `test` son la única verificación. Ejecutar ambos tras
@@ -25,17 +25,23 @@ cada cambio, en ese orden.
 ```
 Pantallas --context.watch/read--> ArticulosProvider (ChangeNotifier)
         --> ArticuloRepositorio (interfaz)
-              ├── ArticuloRepositorioSqflite  → SQLite `unicambio.db` (app real)
-              └── ArticuloRepositorioMemoria  → RAM (solo pruebas)
+              ├── ArticuloRepositorioNube     → Firestore (app real)
+              ├── ArticuloRepositorioSqflite  → SQLite (histórico, solo pruebas)
+              └── ArticuloRepositorioMemoria  → RAM (pruebas / sin Firebase)
 ```
 
-- La UI **nunca** toca SQLite; el provider **nunca** ve SQL. Migrar a la nube =
-  nueva implementación del repositorio + cambiarla en `main.dart`; las
-  pantallas no se tocan.
-- `main.dart` crea el repositorio (Sqflite, o `ArticuloRepositorioMemoria`
-  como respaldo si sqflite falla — p. ej. web), siembra datos de ejemplo
-  (solo si la BD está vacía), llama `provider.iniciar()` y arranca la app con
-  `ChangeNotifierProvider`.
+- La UI **nunca** toca la base de datos; el provider **nunca** ve SQL ni
+  Firestore. Cambiar de backend = nueva implementación del repositorio +
+  cambiarla en `main.dart`; las pantallas no se tocan.
+- `main.dart` crea el repositorio (`ArticuloRepositorioNube` si Firebase
+  inició; `ArticuloRepositorioMemoria` como respaldo), lanza
+  `provider.iniciar()` sin bloquear el arranque y monta la app con
+  `ChangeNotifierProvider`. La puerta de sesión recarga el provider cuando
+  aparece un usuario. Con Firestore, `iniciar()` también se suscribe a
+  `observarTodos()` (`snapshots`) para que las publicaciones de otros usuarios
+  aparezcan en vivo; la suscripción se cancela en `dispose()`.
+- **No hay semilla**: la app arranca vacía; `articulosEjemplo` solo alimenta
+  la implementación en memoria de las pruebas.
 - **Al editar pantallas: mantener el provider como única fuente de datos.**
   En el Avance 6 se reescribieron pantallas usando `articulosEjemplo` directo
   y se desconectó la UI sin que analyze/test lo delataran; verificar tras
@@ -70,11 +76,16 @@ Pantallas --context.watch/read--> ArticulosProvider (ChangeNotifier)
 
 ## Gotchas
 
-- `sqflite` solo corre en Android/iOS. Para UI rápida: `flutter run -d chrome`
-  (en web SQLite no funciona igual); para datos reales: emulador Android.
+- Firestore es la fuente real (`unicambio-2f543`). Las reglas viven en
+  `firestore.rules` (desplegar con `firebase deploy --only firestore:rules` o
+  pegarlas en la consola). Sin sesión, leer/escribir falla por diseño.
+- `sqflite` solo corre en Android/iOS y ya no se usa en la app (solo en sus
+  pruebas, con `sqflite_common_ffi`). Para UI rápida sigue sirviendo
+  `flutter run -d chrome`; para datos reales, emulador Android.
 - Ruido de Logcat `BLASTBufferQueue ...` viene del sistema Android, no del
   proyecto.
 - Pantalla lenta en equipos Transsion/Tecno (GPU Mali): probar
   `flutter run --profile` o `--no-enable-impeller`.
-- Deuda técnica consciente: `esFavorito` es global (no por usuario) y los ids
-  se generan con la hora; resolver al pasar a la nube (`PROGRESO.md` §11).
+- Deuda técnica consciente: "Mis artículos" aún filtra por `vendedorPropio` y
+  la búsqueda en Firestore es en memoria (no hay `LIKE`); resolver en
+  Avance 9 (`PROGRESO.md` §11).

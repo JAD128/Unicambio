@@ -8,12 +8,31 @@
 // Se ejecuta con:  flutter test
 // =============================================================================
 
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:unicambio/datos/articulo_repositorio_memoria.dart';
 import 'package:unicambio/estado/articulos_provider.dart';
 import 'package:unicambio/modelos/articulo.dart';
 import 'package:unicambio/modelos/categoria.dart';
+
+/// Repositorio de prueba que simula los cambios en tiempo real de Firestore.
+class RepositorioPruebaTiempoReal extends ArticuloRepositorioMemoria {
+  final StreamController<List<Articulo>> _cambios =
+      StreamController<List<Articulo>>.broadcast();
+
+  @override
+  bool get enTiempoReal => true;
+
+  @override
+  Stream<List<Articulo>> observarTodos() => _cambios.stream;
+
+  /// Simula que otro usuario publicó/eliminó artículos.
+  void emitir(List<Articulo> articulos) => _cambios.add(articulos);
+
+  Future<void> cerrar() => _cambios.close();
+}
 
 /// Crea un artículo de prueba.
 Articulo crearArticulo({
@@ -144,5 +163,27 @@ void main() {
     await provider.iniciar();
 
     expect(provider.articuloPorId('no-existe'), isNull);
+  });
+
+  test('los cambios en tiempo real actualizan las listas', () async {
+    final RepositorioPruebaTiempoReal repositorio =
+        RepositorioPruebaTiempoReal();
+    final ArticulosProvider enVivo = ArticulosProvider(repositorio);
+
+    await enVivo.iniciar();
+    expect(enVivo.todos, isEmpty);
+
+    repositorio.emitir(<Articulo>[
+      crearArticulo(id: '9', titulo: 'Publicado en vivo'),
+      crearArticulo(id: '10', titulo: 'Otro artículo'),
+    ]);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(enVivo.todos, hasLength(2));
+    expect(enVivo.articulos, hasLength(2));
+    expect(enVivo.error, isNull);
+
+    enVivo.dispose();
+    await repositorio.cerrar();
   });
 }

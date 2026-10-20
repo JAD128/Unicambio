@@ -18,8 +18,8 @@ import 'package:provider/provider.dart';
 
 import 'datos/articulo_repositorio.dart';
 import 'datos/articulo_repositorio_memoria.dart';
+import 'datos/articulo_repositorio_nube.dart';
 import 'datos/articulos_ejemplo.dart';
-import 'datos/semilla.dart';
 import 'estado/articulos_provider.dart';
 import 'firebase_options.dart';
 import 'pantallas/pantalla_autenticacion.dart';
@@ -47,12 +47,15 @@ Future<void> main() async {
     await GoogleSignIn.instance.initialize();
   } catch (_) {}
 
-  // Prepara los datos: SQLite en plataformas con sqflite (Android/iOS);
-  // si no está disponible (p. ej. web o escritorio), usa la lista en memoria
-  // para que la interfaz siga siendo navegable.
-  final ArticuloRepositorio repositorio = await _crearRepositorio();
+  // Prepara los datos: si Firebase arrancó, los artículos viven en Firestore
+  // (compartidos entre usuarios); si no (pruebas, web sin configurar),
+  // se usa la lista en memoria para que la interfaz siga siendo navegable.
+  final ArticuloRepositorio repositorio =
+      errorFirebase == null ? ArticuloRepositorioNube() : ArticuloRepositorioMemoria(iniciales: articulosEjemplo);
   final ArticulosProvider proveedorArticulos = ArticulosProvider(repositorio);
-  await proveedorArticulos.iniciar();
+  // Carga inicial sin bloquear el arranque: la puerta de autenticación
+  // vuelve a cargar los datos cuando ya hay sesión en Firestore.
+  proveedorArticulos.iniciar();
 
   runApp(
     ChangeNotifierProvider<ArticulosProvider>.value(
@@ -60,19 +63,6 @@ Future<void> main() async {
       child: UniCambioApp(errorFirebase: errorFirebase),
     ),
   );
-}
-
-/// Crea el repositorio que usará toda la app y siembra los datos de ejemplo
-/// (la siembra solo actúa si la base de datos está vacía).
-Future<ArticuloRepositorio> _crearRepositorio() async {
-  try {
-    final ArticuloRepositorioSqflite repositorio = ArticuloRepositorioSqflite();
-    await sembrarDatosDeEjemplo(repositorio);
-    return repositorio;
-  } catch (_) {
-    // sqflite no corre en web/escritorio sin ffi: caemos a memoria.
-    return ArticuloRepositorioMemoria(iniciales: articulosEjemplo);
-  }
 }
 
 /// Widget raíz de UniCambio.
@@ -107,8 +97,19 @@ class UniCambioApp extends StatelessWidget {
 }
 
 /// Decide qué contenido mostrar a partir de la sesión persistida por Firebase.
-class _PuertaAutenticacion extends StatelessWidget {
+///
+/// Cuando aparece un usuario (al iniciar sesión o al restaurar la sesión
+/// guardada), recarga los artículos de la nube para ese usuario.
+class _PuertaAutenticacion extends StatefulWidget {
   const _PuertaAutenticacion();
+
+  @override
+  State<_PuertaAutenticacion> createState() => _PuertaAutenticacionState();
+}
+
+class _PuertaAutenticacionState extends State<_PuertaAutenticacion> {
+  /// uid de la sesión que ya cargó sus datos (evita recargar en cada frame).
+  String? _uidCargado;
 
   @override
   Widget build(BuildContext context) => StreamBuilder<User?>(
@@ -117,9 +118,18 @@ class _PuertaAutenticacion extends StatelessWidget {
           if (estado.connectionState == ConnectionState.waiting) {
             return const Scaffold(body: Center(child: CircularProgressIndicator()));
           }
-          return estado.data == null
-              ? const PantallaAutenticacion()
-              : const PantallaPrincipal();
+          final User? usuario = estado.data;
+          if (usuario == null) {
+            _uidCargado = null;
+            return const PantallaAutenticacion();
+          }
+          if (usuario.uid != _uidCargado) {
+            _uidCargado = usuario.uid;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) context.read<ArticulosProvider>().iniciar();
+            });
+          }
+          return const PantallaPrincipal();
         },
       );
 }

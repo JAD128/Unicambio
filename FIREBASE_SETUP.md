@@ -59,3 +59,25 @@ popup de Google funciona con el cliente web que ya tiene Firebase.
 Si en Android aparece un error de cancelación tras elegir la cuenta o un
 mensaje `clientConfigurationError`, revisa los pasos 1–3 (casi siempre es el
 SHA-1 o un `google-services.json` desactualizado).
+
+## Configurar Firestore (Avance 7)
+
+Los artículos y favoritos se guardan en **Cloud Firestore** mediante
+`ArticuloRepositorioNube` (colecciones `articulos` y
+`usuarios/{uid}/favoritos`).
+
+1. En Firebase Console, abre **Firestore Database → Create database**.
+   Elige **Production mode** y la región más cercana (p. ej.
+   `southamerica-east1`). Espera a que esté activa.
+2. Publica las reglas de seguridad del proyecto (archivo `firestore.rules` en
+   la raíz): los artículos solo los edita su autor y cada usuario gestiona
+   sus propios favoritos. Desde la terminal, con la CLI de Firebase:
+
+   ```powershell
+   firebase deploy --only firestore:rules
+   ```
+
+   O manualmente: **Firestore → Rules**, pega el contenido de
+   `firestore.rules` y pulsa **Publish**.
+3. No hace falta crear colecciones a mano: `insertar` las crea al primer
+   uso.

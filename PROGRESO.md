@@ -29,7 +29,7 @@
 | 4 — Conectar la UI | Pantallas leyendo/escribiendo por el provider | ✅ Hecho (reconectado) |
 | 5 — Pruebas | Repositorio (ffi) + provider + widgets | ✅ Hecho |
 | 6 — Autenticación | Firebase Auth (correo/contraseña + Google, sesión, reset) | ✅ Hecho |
-| 7 — Backend/nube | `ArticuloRepositorioNube` + favoritos por usuario | ⛔ No iniciado |
+| 7 — Backend/nube | Firestore (`ArticuloRepositorioNube` + favoritos por usuario) | ✅ Hecho |
 
 > **Incidente del Avance 6**: al implementar la autenticación se reescribieron
 > `main.dart` y las pantallas usando datos de ejemplo estáticos
@@ -42,7 +42,7 @@ Verificación más reciente:
 
 ```bash
 flutter analyze   # -> No issues found!
-flutter test      # -> All tests passed!  (23 pruebas)
+flutter test      # -> All tests passed!  (24 pruebas)
 ```
 
 ---
@@ -87,8 +87,9 @@ ArticulosProvider (ChangeNotifier) — estado global
       │  usa el contrato
       ▼
 ArticuloRepositorio  (interfaz abstracta)
-      ├── ArticuloRepositorioSqflite   → SQLite (app real)
-      └── ArticuloRepositorioMemoria   → lista en RAM (pruebas)
+      ├── ArticuloRepositorioNube     → Firestore (app real)
+      ├── ArticuloRepositorioSqflite  → SQLite (histórico; solo sus pruebas)
+      └── ArticuloRepositorioMemoria  → lista en RAM (pruebas / sin Firebase)
 ```
 
 Reglas de oro:
@@ -114,9 +115,9 @@ Proyecto_Unicambio/
 │   ├── datos/
 │   │   ├── base_datos.dart                # Singleton BaseDatos: abre unicambio.db y crea la tabla
 │   │   ├── articulo_repositorio.dart      # Interfaz ArticuloRepositorio + ArticuloRepositorioSqflite
-│   │   ├── articulo_repositorio_memoria.dart  # Implementación en RAM (pruebas y web)
-│   │   ├── semilla.dart                   # sembrarDatosDeEjemplo(): siembra solo si la BD está vacía
-│   │   └── articulos_ejemplo.dart         # Lista articulosEjemplo (8) — solo para la semilla
+│   │   ├── articulo_repositorio_nube.dart # Implementación sobre Cloud Firestore (app real)
+│   │   ├── articulo_repositorio_memoria.dart  # Implementación en RAM (pruebas / sin Firebase)
+│   │   └── articulos_ejemplo.dart         # Lista articulosEjemplo (8) — solo para memoria en pruebas
 │   ├── estado/
 │   │   └── articulos_provider.dart        # Estado global (ChangeNotifier)
 │   ├── tema/
@@ -135,7 +136,7 @@ Proyecto_Unicambio/
 │       └── pantalla_publicar.dart         # Formulario crear/editar (validado)
 └── test/
     ├── widget_test.dart                   # 2 pruebas de humo (UI con provider en memoria)
-    ├── articulos_provider_test.dart       # 10 pruebas del estado global
+    ├── articulos_provider_test.dart       # 11 pruebas del estado global
     └── articulo_repositorio_test.dart     # 11 pruebas de SQLite (con ffi)
 ```
 
@@ -185,7 +186,9 @@ Archivo de la BD: `unicambio.db` (vía `getDatabasesPath()`).
 **`ArticuloRepositorio`** (`lib/datos/articulo_repositorio.dart`):
 `obtenerTodos()`, `obtenerFavoritos()`, `obtenerPorId(id)`, `insertar(a)`,
 `actualizar(a)`, `eliminar(id)`, `alternarFavorito(id)`,
-`buscar(texto, {categoria})`, `filtrarPorCategoria(categoria)`.
+`buscar(texto, {categoria})`, `filtrarPorCategoria(categoria)`,
+`enTiempoReal` (getter) y `observarTodos()` (stream en tiempo real; solo la
+nube lo implementa).
 
 **`ArticulosProvider`** (`lib/estado/articulos_provider.dart`):
 - Getters: `todos` (sin filtrar), `articulos` (filtrados), `favoritos`,
@@ -219,7 +222,7 @@ favorito → publicar artículo → editar/eliminar en "Mis artículos".
 
 ---
 
-## 9. Pruebas (23 en total)
+## 9. Pruebas (24 en total)
 
 - `articulo_repositorio_test.dart` (11): usa `sqflite_common_ffi`
   (`sqfliteFfiInit()` + `databaseFactory = databaseFactoryFfi`) y prueba el
@@ -241,10 +244,10 @@ favorito → publicar artículo → editar/eliminar en "Mis artículos".
 - **Idioma**: el usuario habla español; responder en español, conciso y práctico.
 - **Entrega por fases**: entregar cada fase completa (archivos + `flutter
   analyze` + `flutter test`), sin pedir confirmación en cada micro-paso.
-- **Sin nube todavía.** Datos de ejemplo (8 artículos, ids `a1`–`a8`)
-  se siembran **solo la primera vez** (si la tabla está vacía). En
-  plataformas sin SQLite (web/escritorio) `main.dart` usa
-  `ArticuloRepositorioMemoria` con los mismos datos de ejemplo como respaldo.
+- **Nube activa (Avance 7).** Los artículos se guardan en Cloud Firestore
+  (`articulos/{id}`) y los favoritos en `usuarios/{uid}/favoritos/{id}`.
+  La app **arranca vacía** (ya no hay semilla). Si Firebase no arranca
+  (pruebas), `main.dart` usa `ArticuloRepositorioMemoria`.
 - **"Mis artículos"** filtra por `vendedor == 'Tú (estudiante)'`
   (`vendedorPropio` en `lib/modelos/articulo.dart`); en el Avance 9 se
   reemplazará por la cuenta autenticada.
@@ -284,15 +287,25 @@ favorito → publicar artículo → editar/eliminar en "Mis artículos".
 - Configuración compilada: proyecto `unicambio-2f543`, apps Android/Web.
   Ver `FIREBASE_SETUP.md` y la sección de Firebase del `README.md`.
 
-### Avance 7 — Backend / nube (sincronización)
-- Crear **`ArticuloRepositorioNube`** implementando `ArticuloRepositorio`
-  (Firestore o Supabase). Cambiarlo en `main.dart` sin tocar pantallas.
-- Migrar `esFavorito` a una relación por usuario (hoy es un campo global del
-  artículo; con varios usuarios debe ser "favoritos por usuario").
-- Quitar/condicionar la **semilla** (`semilla.dart`) para que no se ejecute en
-  producción.
-- Manejo de conexión/offline y errores de red.
-- Estado: ⛔ No iniciado.
+### Avance 7 — Backend / nube (sincronización) ✅ HECHO
+- **`ArticuloRepositorioNube`** (`lib/datos/articulo_repositorio_nube.dart`)
+  implementa `ArticuloRepositorio` sobre Cloud Firestore. `main.dart` lo elige
+  cuando Firebase arrancó; la interfaz y las pantallas no cambiaron.
+- **Estructura:** `articulos/{id}` (título, descripción, precio, categoría,
+  tipo, vendedor, `uidAutor`) y `usuarios/{uid}/favoritos/{articuloId}`.
+- **Favoritos por usuario:** `esFavorito` ya no se guarda en el artículo; el
+  repositorio marca el flag en memoria al leer según los favoritos del uid.
+- **Ids:** los asigna Firestore (se ignoran los ids con hora del modelo).
+- **Semilla eliminada:** `semilla.dart` borrado; la app arranca vacía.
+- **Sesión:** la puerta de autenticación recarga el provider cuando aparece
+  un usuario (`iniciar()`), también al restaurar la sesión.
+- **Errores de red** traducidos en el provider (`network-request-failed`,
+  `permission-denied`, `unavailable`).
+- **Reglas:** `firestore.rules` (leer con sesión, editar solo el dueño,
+  favoritos propios). Despliegue en `FIREBASE_SETUP.md`.
+- SQLite (`ArticuloRepositorioSqflite`) queda como código histórico y pruebas;
+  la app ya no lo usa.
+- Estado: ✅ Hecho.
 
 ### Avance 8 — Fotos reales de los artículos
 - Botón "Agregar foto" (hoy es solo visual) con `image_picker`.
@@ -335,12 +348,11 @@ favorito → publicar artículo → editar/eliminar en "Mis artículos".
 - **Seguridad**: reglas de acceso en la nube, no exponer claves.
 
 ### Deuda técnica / limitaciones conocidas
-- `esFavorito` es global (no por usuario) → resolver en Avance 7.
-- Los "ids" se generan con la hora (`art_<microsegundos>`); en la nube conviene
-  dejar que el backend asigne el id.
-- No hay manejo de estado de conexión (offline) todavía.
-- `ArticuloRepositorioMemoria` se usa en pruebas y como respaldo en
-  plataformas sin SQLite (web/escritorio); la app en Android usa Sqflite.
+- Búsqueda por texto en Firestore se hace en memoria (no hay `LIKE`); aceptable
+  a la escala del proyecto.
+- `ArticuloRepositorioSqflite` ya no se usa en la app (solo en sus pruebas);
+  se conserva como referencia. `ArticuloRepositorioMemoria` se usa en pruebas
+  y si Firebase no arranca.
 - "Mis artículos" se filtra por el vendedor provisional `vendedorPropio`, no
   por la cuenta de Firebase → resolver en Avance 9.
 
@@ -377,3 +389,31 @@ La nota anterior sobre la verificación pendiente quedó superada al repetir los
 comandos: análisis y pruebas terminaron correctamente.
 
 Configuración Firebase completada por la usuaria: proyecto `unicambio-2f543`, apps Android/Web. FlutterFire generó `lib/firebase_options.dart`, `android/app/google-services.json` y aplicó el plugin de Google Services a Gradle. `main.dart` ahora inicializa desde `DefaultFirebaseOptions.currentPlatform`; ya no se requieren defines de compilación. Falta activar Email/Password en Firebase Console antes de usar registro/inicio. Guía actualizada en `FIREBASE_SETUP.md`.
+
+## Actualización — Avance 7: Firestore
+
+Los artículos y favoritos ahora viven en Cloud Firestore
+(`ArticuloRepositorioNube`): `articulos/{id}` con `uidAutor` y
+`usuarios/{uid}/favoritos/{articuloId}`. Los favoritos son por usuario
+(`esFavorito` ya no se persiste en el artículo; se marca al leer), los ids los
+asigna Firestore y la semilla se eliminó (la app arranca vacía). `main.dart`
+elige el repo nube cuando Firebase inició y la puerta de sesión recarga el
+provider al aparecer un usuario. `firestore.rules` restringe la escritura al
+dueño y los favoritos al propio uid. Dependencia nueva: `cloud_firestore`
+6.10.0. Verificación: `flutter analyze` → `No issues found!` y `flutter test`
+→ `All tests passed!` (24).
+
+## Actualización — Tiempo real con Firestore
+
+La lista se actualiza sola cuando otro usuario publica, edita o elimina.
+`ArticuloRepositorioNube.observarTodos()` usa `snapshots()` de Firestore (no
+hace *polling*: el SDK mantiene la conexión y solo envía los documentos que
+cambian). El provider se suscribe en `iniciar()` solo si
+`repositorio.enTiempoReal` es `true` (nube), vuelve a filtrar en memoria con la
+búsqueda/categoría activas, recalcula favoritos y cancela la suscripción en
+`dispose()`. SQLite y memoria implementan `observarTodos()` con un stream vacío.
+En facturación, cada documento entregado cuenta como 1 lectura; con este
+tamaño de datos queda holgadamente dentro del plan gratuito. Nueva prueba:
+`los cambios en tiempo real actualizan las listas` (fake con
+`StreamController`). Verificación: `No issues found!` + `All tests passed!`
+(24).

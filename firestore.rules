@@ -1,0 +1,31 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Artículos: cualquier usuario autenticado puede leerlos; solo el que
+    // publicó (uidAutor) puede editarlos o borrarlos.
+    match /articulos/{articuloId} {
+      allow read: if request.auth != null;
+
+      allow create: if request.auth != null
+        && request.resource.data.uidAutor == request.auth.uid
+        && request.resource.data.titulo is string
+        && request.resource.data.titulo.size() > 0
+        && request.resource.data.precio is number;
+
+      allow update: if request.auth != null
+        && resource.data.uidAutor == request.auth.uid
+        && request.resource.data.uidAutor == resource.data.uidAutor;
+
+      allow delete: if request.auth != null
+        && resource.data.uidAutor == request.auth.uid;
+    }
+
+    // Favoritos: cada usuario solo puede leer y modificar los suyos.
+    match /usuarios/{uid}/favoritos/{articuloId} {
+      allow read, write: if request.auth != null
+        && request.auth.uid == uid;
+    }
+  }
+}

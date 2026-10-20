@@ -15,9 +15,11 @@
 // repositorio -> y llama a `notifyListeners()` para que la UI se redibuje.
 // =============================================================================
 
+import 'dart:async';
 import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
+import 'package:firebase_core/firebase_core.dart' show FirebaseException;
 
 import '../datos/articulo_repositorio.dart';
 import '../modelos/articulo.dart';
@@ -54,6 +56,12 @@ class ArticulosProvider extends ChangeNotifier {
 
   /// Categoría seleccionada en los filtros (null = "Todos").
   Categoria? _categoriaSeleccionada;
+
+  /// Escucha de cambios en tiempo real (solo si el repositorio la soporta).
+  StreamSubscription<List<Articulo>>? _suscripcion;
+
+  /// `true` tras [dispose]; evita avisar a una UI ya destruida.
+  bool _destruido = false;
 
   // ---------------------------------------------------------------------------
   // Getters públicos: lo único que las pantallas pueden leer.
@@ -97,8 +105,11 @@ class ArticulosProvider extends ChangeNotifier {
   // ---------------------------------------------------------------------------
 
   /// Carga los artículos y los favoritos desde la base de datos.
-  /// Se llama una vez al abrir la app (en `main.dart`).
-  Future<void> iniciar() => _ejecutar(_refrescar);
+  /// Se llama una vez al abrir la app (en `main.dart`) y al iniciar sesión.
+  Future<void> iniciar() async {
+    await _ejecutar(_refrescar);
+    _escucharCambios();
+  }
 
   // ---------------------------------------------------------------------------
   // Búsqueda y filtros
@@ -167,6 +178,45 @@ class ArticulosProvider extends ChangeNotifier {
     _favoritos = await _repositorio.obtenerFavoritos();
   }
 
+  /// Se suscribe a los cambios de la nube (si el repositorio los soporta) para
+  /// que las pantallas se actualicen solas ante publicaciones de otros usuarios.
+  void _escucharCambios() {
+    if (!_repositorio.enTiempoReal) return;
+    _suscripcion?.cancel();
+    _suscripcion = _repositorio.observarTodos().listen(
+      (List<Articulo> todos) {
+        _todos = todos;
+        _articulos = _filtrarEnMemoria(todos);
+        _favoritos = todos.where((Articulo a) => a.esFavorito).toList();
+        _error = null;
+        if (!_destruido) notifyListeners();
+      },
+      onError: (Object error) {
+        _error = _mensajeDeError(error);
+        if (!_destruido) notifyListeners();
+      },
+    );
+  }
+
+  /// Aplica la búsqueda y la categoría actuales a una lista ya cargada.
+  List<Articulo> _filtrarEnMemoria(List<Articulo> todos) {
+    final String consulta = _textoBusqueda.trim().toLowerCase();
+    return todos.where((Articulo articulo) {
+      final bool coincideTexto = consulta.isEmpty ||
+          articulo.titulo.toLowerCase().contains(consulta);
+      final bool coincideCategoria = _categoriaSeleccionada == null ||
+          articulo.categoria == _categoriaSeleccionada;
+      return coincideTexto && coincideCategoria;
+    }).toList();
+  }
+
+  @override
+  void dispose() {
+    _destruido = true;
+    _suscripcion?.cancel();
+    super.dispose();
+  }
+
   /// Envuelve cualquier operación con el manejo de estado (cargando + error).
   ///
   /// Así no repetimos el mismo `try/catch` en cada método:
@@ -181,10 +231,27 @@ class ArticulosProvider extends ChangeNotifier {
     try {
       await accion();
     } catch (e) {
-      _error = 'Ocurrió un error al acceder a los datos: $e';
+      _error = _mensajeDeError(e);
     } finally {
       _cargando = false;
       notifyListeners();
     }
+  }
+
+  /// Traduce una excepción a un mensaje amigable en español.
+  String _mensajeDeError(Object error) {
+    if (error is FirebaseException) {
+      return switch (error.code) {
+        'network-request-failed' => 'Sin conexión a internet. Revisa tu red.',
+        'permission-denied' =>
+          'No tienes permiso para esta operación. Inicia sesión de nuevo.',
+        'unavailable' => 'El servicio no responde. Intenta de nuevo en un momento.',
+        _ => 'Error al acceder a la nube (${error.code}).',
+      };
+    }
+    if (error is StateError) {
+      return error.message;
+    }
+    return 'Ocurrió un error al acceder a los datos: $error';
   }
 }

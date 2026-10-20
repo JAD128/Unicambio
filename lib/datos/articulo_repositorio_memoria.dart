@@ -36,6 +36,14 @@ class ArticuloRepositorioMemoria implements ArticuloRepositorio {
   Future<List<Articulo>> obtenerTodos() async => _ordenados(_articulos);
 
   @override
+  bool get enTiempoReal => false;
+
+  /// Solo hay datos locales: no hay cambios externos que escuchar.
+  @override
+  Stream<List<Articulo>> observarTodos() =>
+      const Stream<List<Articulo>>.empty();
+
+  @override
   Future<List<Articulo>> obtenerFavoritos() async =>
       _ordenados(_articulos.where((Articulo a) => a.esFavorito));
 

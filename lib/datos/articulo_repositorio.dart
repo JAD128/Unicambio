@@ -50,6 +50,20 @@ abstract class ArticuloRepositorio {
 
   /// Devuelve los artículos de una [categoria].
   Future<List<Articulo>> filtrarPorCategoria(Categoria categoria);
+
+  /// `true` si el repositorio puede avisar en tiempo real de los cambios que
+  /// hacen otros usuarios (Firestore sí; SQLite y memoria no).
+  ///
+  /// El provider solo escucha [observarTodos] cuando esto es `true`, porque los
+  /// repositorios locales no cambian "por fuera" de la app.
+  bool get enTiempoReal => false;
+
+  /// Emite la lista completa de artículos cada vez que cambia en la nube.
+  ///
+  /// Por defecto no emite nada: solo lo implementan los repositorios con
+  /// [enTiempoReal] (ver `ArticuloRepositorioNube`).
+  Stream<List<Articulo>> observarTodos() =>
+      const Stream<List<Articulo>>.empty();
 }
 
 /// Implementación de [ArticuloRepositorio] usando SQLite (paquete `sqflite`).
@@ -76,6 +90,14 @@ class ArticuloRepositorioSqflite implements ArticuloRepositorio {
     );
     return filas.map(Articulo.fromMap).toList();
   }
+
+  @override
+  bool get enTiempoReal => false;
+
+  /// Solo hay datos locales: no hay cambios externos que escuchar.
+  @override
+  Stream<List<Articulo>> observarTodos() =>
+      const Stream<List<Articulo>>.empty();
 
   @override
   Future<List<Articulo>> obtenerFavoritos() async {
