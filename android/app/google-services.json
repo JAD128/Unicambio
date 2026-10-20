@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "619158453000",
+    "project_id": "unicambio-2f543",
+    "storage_bucket": "unicambio-2f543.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:619158453000:android:7ae939c2a537ea67f3cabd",
+        "android_client_info": {
+          "package_name": "com.unicambio.unicambio"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBjwymFwSiAhXSwrF-_GTwbzC6rV3rHET0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

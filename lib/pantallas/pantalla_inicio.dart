@@ -11,6 +11,7 @@
 // =============================================================================
 
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../datos/articulos_ejemplo.dart';
 import '../modelos/articulo.dart';
@@ -41,11 +42,12 @@ class PantallaInicio extends StatelessWidget {
       appBar: AppBar(
         title: const Text('UniCambio'),
         actions: <Widget>[
-          // Campana de notificaciones: decorativa en este avance.
           IconButton(
-            onPressed: () {},
-            icon: const Icon(Icons.notifications_none),
-            tooltip: 'Notificaciones',
+            onPressed: () async {
+              await FirebaseAuth.instance.signOut();
+            },
+            icon: const Icon(Icons.logout),
+            tooltip: 'Cerrar sesión',
           ),
         ],
       ),
@@ -59,7 +61,7 @@ class PantallaInicio extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
-                  'Hola, estudiante',
+                  'Hola, ${FirebaseAuth.instance.currentUser?.displayName ?? 'estudiante'}',
                   style: tema.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),

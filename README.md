@@ -1,93 +1,180 @@
 # UniCambio
 
-Aplicación móvil para estudiantes universitarios que permite **publicar artículos para vender, intercambiar o regalar** entre compañeros.
+Aplicación Flutter para estudiantes universitarios que permite publicar
+artículos para vender, intercambiar o regalar. El proyecto tiene una interfaz
+de artículos, persistencia local SQLite y autenticación con Firebase Auth.
 
-> **Estado del proyecto: Primer avance — Interfaz visual (UI).**
-> Esta versión es un prototipo navegable. Los datos son de ejemplo y se manejan en memoria; todavía **no** hay base de datos, inicio de sesión ni lógica funcional.
+## Estado actual
 
----
+- **Autenticación:** crear cuenta, iniciar sesión, recuperar contraseña y
+  cerrar sesión con Firebase Authentication (correo y contraseña).
+- **Sesión:** Firebase conserva la sesión entre reinicios y la app abre Inicio
+  cuando detecta un usuario autenticado.
+- **Artículos:** Firebase Auth no guarda artículos ni favoritos. La gestión de
+  publicaciones y su persistencia siguen separadas del inicio de sesión; todavía
+  no se sincronizan ni se asocian a una cuenta en la nube.
+- **Pruebas:** actualmente hay 2 pruebas de widgets.
 
-## Funcionalidades de este avance
+## Cómo funciona la autenticación
 
-| Sección | Estado |
+El recorrido principal está en `lib/main.dart`:
+
+1. `main()` prepara Flutter con `WidgetsFlutterBinding.ensureInitialized()`.
+2. `Firebase.initializeApp()` inicia Firebase usando las opciones generadas
+   para la plataforma actual.
+3. Si la inicialización falla, se muestra una pantalla con el error. Si se
+   inicia correctamente, `UniCambioApp` abre `_PuertaAutenticacion`.
+4. `_PuertaAutenticacion` escucha `FirebaseAuth.instance.authStateChanges()`:
+   - Mientras Firebase restaura la sesión, muestra un indicador de carga.
+   - Si no hay usuario, muestra `PantallaAutenticacion`.
+   - Si hay usuario, muestra `PantallaPrincipal`.
+
+Firebase Auth guarda y restaura la sesión en el dispositivo. No se guarda la
+contraseña en la app.
+
+### Registro e inicio de sesión
+
+`lib/pantallas/pantalla_autenticacion.dart` contiene los formularios y las
+acciones de autenticación. La misma pantalla alterna entre inicio y registro:
+
+- El registro valida nombre, formato básico del correo y una contraseña de al
+  menos 6 caracteres. Llama a
+  `createUserWithEmailAndPassword()` y guarda el nombre como `displayName`.
+- El inicio llama a `signInWithEmailAndPassword()`.
+- Los errores comunes de Firebase se convierten en mensajes en español, por
+  ejemplo correo inválido, cuenta existente o contraseña débil.
+- **¿Olvidaste tu contraseña?** envía el enlace de restablecimiento con
+  `sendPasswordResetEmail()` al correo escrito.
+
+Al iniciar sesión, `lib/pantallas/pantalla_inicio.dart` muestra el nombre de
+Firebase si existe. Su botón de salida llama a `FirebaseAuth.instance.signOut()`;
+el cambio de sesión hace que `_PuertaAutenticacion` vuelva a mostrar el acceso.
+
+## Configuración de Firebase
+
+La app está vinculada al proyecto Firebase **UniCambio** (`unicambio-2f543`),
+con aplicaciones registradas para Android y Web. Para que el acceso funcione,
+el proveedor **Correo electrónico/contraseña** debe estar habilitado en Firebase
+Console:
+
+1. Abre Firebase Console y selecciona el proyecto **UniCambio**.
+2. Ve a **Authentication → Sign-in method** (o **Proveedores de acceso**).
+3. Activa **Correo electrónico/contraseña** y guarda.
+
+### Archivos de configuración
+
+`flutterfire configure` generó los archivos y ajustes de plataforma:
+
+| Archivo | Para qué sirve |
 |---|---|
-| Pantalla principal con artículos de ejemplo | Hecho (visual) |
-| Barra de búsqueda | Visual (no filtra aún) |
-| Filtros por categoría | Visual (no filtra aún) |
-| Detalle del artículo | Hecho (navegación) |
-| Favoritos (listar) | Visual (no agregar/quitar aún) |
-| Formulario de publicación | Visual (no guarda aún) |
-| Navegación Inicio / Favoritos / Mis artículos | Hecho |
-| Tema visual moderno (Material 3) | Hecho |
+| `lib/firebase_options.dart` | Opciones Dart por plataforma (Android y Web). `main.dart` lee `DefaultFirebaseOptions.currentPlatform`. No editarlo a mano; vuelve a generar si agregas plataformas o cambias de proyecto. |
+| `android/app/google-services.json` | Identifica la app Android ante Firebase y es leído por el plugin de Google Services. |
+| `firebase.json` | Metadatos de configuración usados por las herramientas Firebase. |
+| `android/settings.gradle.kts` | Declara la versión del plugin Gradle de Google Services. |
+| `android/app/build.gradle.kts` | Aplica el plugin de Google Services a la app Android. |
 
-**Pendiente para los siguientes avances:** búsqueda real, filtrado por categorías, agregar/quitar favoritos, crear/editar/eliminar publicaciones, validación del formulario y persistencia de datos (base de datos o backend).
+Las dependencias `firebase_core` y `firebase_auth` están declaradas en
+`pubspec.yaml`. `firebase_core` inicializa Firebase; `firebase_auth` permite
+crear cuentas, iniciar sesión, restablecer la contraseña y cerrar sesión.
 
----
+### Si se configura otra instalación o plataforma
+
+Desde la raíz del proyecto, con Firebase CLI y FlutterFire CLI instalados e
+iniciados con sesión, ejecuta:
+
+```powershell
+dart pub global run flutterfire_cli:flutterfire configure
+```
+
+Elige el proyecto Firebase y las plataformas que se usarán. La CLI actualiza
+`lib/firebase_options.dart` y los ajustes de Android cuando corresponde. No es
+necesario copiar claves ni pasar `--dart-define` al ejecutar.
+
+Si PowerShell no reconoce `firebase`, pero Firebase CLI ya está instalado en
+Windows, agrega su carpeta al `PATH` de la ventana actual y verifica la versión:
+
+```powershell
+$env:Path += ";$env:APPDATA\npm"
+firebase --version
+```
+
+Si la cuenta conectada muestra cero proyectos, confirma que `firebase login`
+usó la misma cuenta de Google con la que creaste el proyecto en Firebase
+Console.
+
+## Ejecutar la aplicación
+
+Desde la raíz del proyecto:
+
+```powershell
+flutter pub get
+flutter run
+```
+
+Para abrirla en Chrome:
+
+```powershell
+flutter run -d chrome
+```
+
+La autenticación web utiliza las opciones Web de `lib/firebase_options.dart`.
+Para ejecutar en Android, conecta un dispositivo o inicia un emulador.
+
+### Probar las funciones
+
+1. Abre la pantalla de acceso y selecciona **Crear cuenta**.
+2. Ingresa nombre, correo y contraseña de 6 caracteres o más. Firebase creará
+   la cuenta y la app abrirá Inicio.
+3. Pulsa el ícono **Cerrar sesión** en la barra superior.
+4. Inicia sesión con el mismo correo y contraseña.
+5. Cierra y vuelve a abrir la app para comprobar que Firebase restaura la
+   sesión. Para detener `flutter run`, escribe `q` en la terminal.
+6. En la pantalla de acceso, prueba **¿Olvidaste tu contraseña?** y revisa el
+   correo para encontrar el enlace de restablecimiento.
+
+Las cuentas creadas se ven en Firebase Console, en **Authentication → Users**.
+
+## Verificación del proyecto
+
+```powershell
+flutter analyze
+flutter test
+```
+
+Al actualizar este README, las verificaciones reportadas fueron **No issues
+found!** y **All tests passed!** (2 pruebas widget presentes).
+
+## Estructura relevante
+
+```text
+lib/
+├── main.dart                         # Inicialización Firebase y puerta de sesión
+├── firebase_options.dart             # Opciones de Firebase por plataforma (generado)
+├── pantallas/
+│   ├── pantalla_autenticacion.dart   # Inicio, registro y recuperar contraseña
+│   ├── pantalla_inicio.dart         # Inicio y acción de cerrar sesión
+│   ├── pantalla_favoritos.dart
+│   ├── pantalla_mis_articulos.dart
+│   └── pantalla_publicar.dart
+├── datos/                            # Persistencia/repositorio de artículos
+├── estado/                           # Estado de artículos
+└── tema/                             # Tema visual Material 3
+test/
+└── widget_test.dart                  # Pruebas de widgets
+```
 
 ## Tecnologías
 
-- **Flutter** (probado con 3.47.6, canal stable)
-- **Dart** (SDK `^3.13.5`)
-- **Visual Studio Code** (editor recomendado)
-- **Git / GitHub**
+- Flutter y Dart (`pubspec.yaml` requiere Dart `^3.13.0`).
+- Firebase Authentication para cuentas por correo y contraseña.
+- `firebase_core` para inicializar Firebase y `firebase_auth` para autenticación.
+- SQLite (`sqflite`) para la persistencia local de artículos.
+- Provider para el estado de artículos.
 
-No requiere paquetes externos: solo `flutter` y `cupertino_icons`.
+## Alcance pendiente
 
----
-
-## Estructura del proyecto
-
-```
-Proyecto_Unicambio/
-├── lib/
-│   ├── main.dart                          # Arranque + navegación inferior (Inicio/Favoritos/Mis artículos)
-│   ├── modelos/
-│   │   ├── articulo.dart                  # Modelo Articulo + enum TipoPublicacion (Venta/Intercambio/Regalo)
-│   │   └── categoria.dart                 # enum Categoria (etiqueta + ícono)
-│   ├── datos/
-│   │   └── articulos_ejemplo.dart         # Datos de ejemplo en memoria
-│   ├── tema/
-│   │   └── tema_app.dart                  # Tema visual (colores, tarjetas, inputs) Material 3
-│   ├── widgets/
-│   │   ├── campo_busqueda.dart            # Barra de búsqueda
-│   │   ├── chip_categoria.dart            # Filtro de categoría
-│   │   └── tarjeta_articulo.dart          # Tarjeta de artículo (imagen, insignia, favorito, precio)
-│   └── pantallas/
-│       ├── pantalla_inicio.dart           # Inicio: saludo + buscador + filtros + cuadrícula
-│       ├── pantalla_favoritos.dart        # Favoritos
-│       ├── pantalla_mis_articulos.dart    # Mis artículos (con menú Editar/Eliminar)
-│       ├── pantalla_detalle_articulo.dart # Detalle completo del artículo
-│       └── pantalla_publicar.dart         # Formulario de publicación
-└── test/
-    └── widget_test.dart                   # Pruebas de humo
-```
-
----
-
-## Requisitos previos
-
-1. Instalar [Flutter](https://docs.flutter.dev/get-started/install).
-2. Comprobar la instalación:
-
-   ```bash
-   flutter doctor
-   ```
-
-3. Instalar dependencias del proyecto:
-
-   ```bash
-   flutter pub get
-   ```
-
----
-
-
-
-
-
-
-## Notas
-
-- Los artículos mostrados provienen de `lib/datos/articulos_ejemplo.dart` (datos de ejemplo).
-- El código está **comentado** y documentado con `///` para facilitar el estudio.
-- El botón de favoritos, la búsqueda, los filtros y el formulario están marcados como pendientes (`TODO`) para el siguiente avance.
+- Asociar publicaciones a la cuenta autenticada y filtrar “Mis artículos” por
+  usuario.
+- Sincronizar artículos y favoritos con un backend en la nube.
+- Añadir verificación de correo y una pantalla completa de perfil, si se
+  requieren para el siguiente avance.

@@ -11,7 +11,11 @@
 // =============================================================================
 
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 
+import 'firebase_options.dart';
+import 'pantallas/pantalla_autenticacion.dart';
 import 'pantallas/pantalla_favoritos.dart';
 import 'pantallas/pantalla_inicio.dart';
 import 'pantallas/pantalla_mis_articulos.dart';
@@ -19,14 +23,33 @@ import 'pantallas/pantalla_publicar.dart';
 import 'tema/tema_app.dart';
 
 /// Función principal: es lo primero que se ejecuta al iniciar la aplicación.
-void main() {
-  runApp(const UniCambioApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  Object? errorFirebase;
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (error) {
+    errorFirebase = error;
+  }
+  runApp(UniCambioApp(errorFirebase: errorFirebase));
 }
 
 /// Widget raíz de UniCambio.
 /// Configura el título, el tema y la pantalla inicial de la aplicación.
 class UniCambioApp extends StatelessWidget {
-  const UniCambioApp({super.key});
+  const UniCambioApp({
+    super.key,
+    this.errorFirebase,
+    this.firebaseConfigurado = true,
+  });
+
+  /// Error de inicialización, si Firebase no pudo arrancar.
+  final Object? errorFirebase;
+
+  /// Permite mostrar el aviso de configuración en pruebas de widgets.
+  final bool firebaseConfigurado;
 
   @override
   Widget build(BuildContext context) {
@@ -35,9 +58,63 @@ class UniCambioApp extends StatelessWidget {
       // Quitamos la cinta roja de "debug" para que se vea limpio en la demo.
       debugShowCheckedModeBanner: false,
       theme: TemaApp.claro,
-      home: const PantallaPrincipal(),
+      home: errorFirebase != null
+          ? _PantallaErrorFirebase(error: errorFirebase!)
+          : !firebaseConfigurado
+              ? const _PantallaConfigurarFirebase()
+              : const _PuertaAutenticacion(),
     );
   }
+}
+
+/// Decide qué contenido mostrar a partir de la sesión persistida por Firebase.
+class _PuertaAutenticacion extends StatelessWidget {
+  const _PuertaAutenticacion();
+
+  @override
+  Widget build(BuildContext context) => StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, estado) {
+          if (estado.connectionState == ConnectionState.waiting) {
+            return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          }
+          return estado.data == null
+              ? const PantallaAutenticacion()
+              : const PantallaPrincipal();
+        },
+      );
+}
+
+class _PantallaConfigurarFirebase extends StatelessWidget {
+  const _PantallaConfigurarFirebase();
+
+  @override
+  Widget build(BuildContext context) => const Scaffold(
+        body: Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              'Firebase aún no está configurado. Ejecuta flutterfire configure para generar las opciones de esta plataforma.',
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+}
+
+class _PantallaErrorFirebase extends StatelessWidget {
+  const _PantallaErrorFirebase({required this.error});
+  final Object error;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text('No se pudo iniciar Firebase. Revisa la configuración del proyecto.\n\n$error', textAlign: TextAlign.center),
+          ),
+        ),
+      );
 }
 
 /// Contenedor principal con la barra de navegación inferior.
