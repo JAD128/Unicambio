@@ -12,6 +12,11 @@ import 'package:flutter/material.dart';
 
 import 'categoria.dart';
 
+/// Nombre del vendedor que se asigna a las publicaciones creadas en este
+/// dispositivo. Es un marcador provisional: en el Avance 9 se reemplazará por
+/// el nombre real del usuario autenticado.
+const String vendedorPropio = 'Tú (estudiante)';
+
 /// Tipos de publicación que ofrece UniCambio.
 ///
 /// - [venta]: el artículo se ofrece por un precio en dinero.

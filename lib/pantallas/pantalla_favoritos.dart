@@ -1,16 +1,15 @@
 // =============================================================================
 // ARCHIVO: lib/pantallas/pantalla_favoritos.dart
-// DESCRIPCIÓN: Pestaña "Favoritos". Muestra los artículos que el estudiante
-//              guardó (datos de ejemplo).
-//
-// NOTA (primer avance): es SOLO VISUAL. Aún no se pueden añadir ni quitar
-// favoritos; se muestran los que vienen precargados en los datos de ejemplo.
+// DESCRIPCIÓN: Pestaña "Favoritos". Muestra los artículos marcados como
+//              favoritos (dato real desde SQLite, vía [ArticulosProvider]).
 // =============================================================================
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../datos/articulos_ejemplo.dart';
+import '../estado/articulos_provider.dart';
 import '../modelos/articulo.dart';
+import '../widgets/estado_placeholder.dart';
 import '../widgets/tarjeta_articulo.dart';
 import 'pantalla_detalle_articulo.dart';
 
@@ -20,14 +19,17 @@ class PantallaFavoritos extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData tema = Theme.of(context);
+    final ArticulosProvider proveedor = context.watch<ArticulosProvider>();
+    final List<Articulo> favoritos = proveedor.favoritos;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Favoritos')),
-      body: favoritosEjemplo.isEmpty
-          // Caso poco probable con datos de ejemplo, pero dejamos el mensaje
-          // listo para cuando se conecte la lógica real.
-          ? _MensajeVacio(tema: tema)
+      body: favoritos.isEmpty
+          ? const EstadoPlaceholder(
+              icono: Icons.favorite_border,
+              titulo: 'Todavía no tienes favoritos',
+              subtitulo: 'Guarda artículos para verlos aquí',
+            )
           : GridView.builder(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -36,12 +38,11 @@ class PantallaFavoritos extends StatelessWidget {
                 mainAxisSpacing: 12,
                 childAspectRatio: 0.72,
               ),
-              itemCount: favoritosEjemplo.length,
+              itemCount: favoritos.length,
               itemBuilder: (BuildContext context, int indice) {
-                final Articulo articulo = favoritosEjemplo[indice];
+                final Articulo articulo = favoritos[indice];
                 return TarjetaArticulo(
                   articulo: articulo,
-                  // Abre el detalle del artículo al tocarlo.
                   alTocar: () {
                     Navigator.of(context).push(
                       MaterialPageRoute<void>(
@@ -50,44 +51,12 @@ class PantallaFavoritos extends StatelessWidget {
                       ),
                     );
                   },
+                  alTocarFavorito: () => context
+                      .read<ArticulosProvider>()
+                      .alternarFavorito(articulo.id),
                 );
               },
             ),
-    );
-  }
-}
-
-/// Mensaje que se muestra cuando no hay artículos favoritos.
-class _MensajeVacio extends StatelessWidget {
-  final ThemeData tema;
-
-  const _MensajeVacio({required this.tema});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Icon(
-            Icons.favorite_border,
-            size: 64,
-            color: tema.colorScheme.onSurfaceVariant,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Todavía no tienes favoritos',
-            style: tema.textTheme.titleMedium,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Guarda artículos para verlos aquí',
-            style: tema.textTheme.bodyMedium?.copyWith(
-              color: tema.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

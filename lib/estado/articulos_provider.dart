@@ -34,6 +34,9 @@ class ArticulosProvider extends ChangeNotifier {
   // Estado interno (privado). Nadie lo modifica desde afuera.
   // ---------------------------------------------------------------------------
 
+  /// Lista completa de artículos cargados (sin aplicar búsqueda ni filtro).
+  List<Articulo> _todos = <Articulo>[];
+
   /// Lista de artículos que se está mostrando en Inicio (según búsqueda/filtro).
   List<Articulo> _articulos = <Articulo>[];
 
@@ -56,6 +59,9 @@ class ArticulosProvider extends ChangeNotifier {
   // Getters públicos: lo único que las pantallas pueden leer.
   // ---------------------------------------------------------------------------
 
+  /// Todos los artículos cargados, sin filtrar (los que hay en la base).
+  List<Articulo> get todos => UnmodifiableListView<Articulo>(_todos);
+
   /// Artículos a mostrar en Inicio (filtrados por búsqueda y categoría).
   /// Se devuelve "no modificable" para que la UI no altere el estado por error.
   List<Articulo> get articulos => UnmodifiableListView<Articulo>(_articulos);
@@ -77,6 +83,14 @@ class ArticulosProvider extends ChangeNotifier {
 
   /// `true` si la lista visible está vacía (útil para el estado vacío).
   bool get listaVacia => _articulos.isEmpty;
+
+  /// Devuelve el artículo con ese id, o `null` si no existe.
+  Articulo? articuloPorId(String id) {
+    for (final Articulo articulo in _todos) {
+      if (articulo.id == id) return articulo;
+    }
+    return null;
+  }
 
   // ---------------------------------------------------------------------------
   // Carga inicial
@@ -145,6 +159,7 @@ class ArticulosProvider extends ChangeNotifier {
   /// Recarga las listas desde el repositorio, aplicando la búsqueda y el filtro
   /// actuales. No avisa a la UI (eso lo hace [_ejecutar]).
   Future<void> _refrescar() async {
+    _todos = await _repositorio.obtenerTodos();
     _articulos = await _repositorio.buscar(
       _textoBusqueda,
       categoria: _categoriaSeleccionada,

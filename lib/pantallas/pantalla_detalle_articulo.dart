@@ -4,12 +4,14 @@
 //              imagen, título, precio, descripción, vendedor y botón de
 //              contacto.
 //
-// NOTA (primer avance): es SOLO VISUAL. El botón "Contactar" y el corazón de
-// favorito todavía no realizan acciones.
+// El estado del favorito se lee del provider (por id), así que el corazón
+// refleja cambios hechos en otras pantallas y los que se hacen aquí.
 // =============================================================================
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../estado/articulos_provider.dart';
 import '../modelos/articulo.dart';
 import '../modelos/categoria.dart';
 
@@ -23,17 +25,20 @@ class PantallaDetalleArticulo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ThemeData tema = Theme.of(context);
+    // Versión fresca del artículo según el provider (por si cambió el favorito).
+    final Articulo actual = context.watch<ArticulosProvider>().articuloPorId(articulo.id) ?? articulo;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Detalle del artículo'),
         actions: <Widget>[
-          // Corazón de favoritos (solo muestra el estado actual).
           IconButton(
-            onPressed: () {},
+            onPressed: () => context
+                .read<ArticulosProvider>()
+                .alternarFavorito(articulo.id),
             icon: Icon(
-              articulo.esFavorito ? Icons.favorite : Icons.favorite_border,
-              color: articulo.esFavorito ? const Color(0xFFE53935) : null,
+              actual.esFavorito ? Icons.favorite : Icons.favorite_border,
+              color: actual.esFavorito ? const Color(0xFFE53935) : null,
             ),
             tooltip: 'Favorito',
           ),
@@ -44,7 +49,7 @@ class PantallaDetalleArticulo extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             // ------------------ Imagen grande simulada ------------------
-            _CabeceraImagen(articulo: articulo),
+            _CabeceraImagen(articulo: actual),
 
             Padding(
               padding: const EdgeInsets.all(16),
@@ -55,14 +60,14 @@ class PantallaDetalleArticulo extends StatelessWidget {
                   Row(
                     children: <Widget>[
                       _Pastilla(
-                        icono: articulo.tipo.icono,
-                        texto: articulo.tipo.etiqueta,
-                        color: articulo.tipo.color,
+                        icono: actual.tipo.icono,
+                        texto: actual.tipo.etiqueta,
+                        color: actual.tipo.color,
                       ),
                       const SizedBox(width: 8),
                       _Pastilla(
-                        icono: articulo.categoria.icono,
-                        texto: articulo.categoria.etiqueta,
+                        icono: actual.categoria.icono,
+                        texto: actual.categoria.etiqueta,
                         color: tema.colorScheme.primary,
                       ),
                     ],
@@ -71,7 +76,7 @@ class PantallaDetalleArticulo extends StatelessWidget {
 
                   // -------------------------- Título ---------------------
                   Text(
-                    articulo.titulo,
+                    actual.titulo,
                     style: tema.textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
@@ -80,12 +85,12 @@ class PantallaDetalleArticulo extends StatelessWidget {
 
                   // -------------------------- Precio ---------------------
                   Text(
-                    articulo.precioTexto,
+                    actual.precioTexto,
                     style: tema.textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: articulo.tipo == TipoPublicacion.venta
+                      color: actual.tipo == TipoPublicacion.venta
                           ? tema.colorScheme.primary
-                          : articulo.tipo.color,
+                          : actual.tipo.color,
                     ),
                   ),
                   const SizedBox(height: 22),
@@ -99,7 +104,7 @@ class PantallaDetalleArticulo extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    articulo.descripcion,
+                    actual.descripcion,
                     style: tema.textTheme.bodyLarge?.copyWith(height: 1.4),
                   ),
                   const SizedBox(height: 24),
@@ -112,7 +117,7 @@ class PantallaDetalleArticulo extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  _TarjetaVendedor(nombre: articulo.vendedor),
+                  _TarjetaVendedor(nombre: actual.vendedor),
                 ],
               ),
             ),
@@ -125,7 +130,13 @@ class PantallaDetalleArticulo extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
           child: FilledButton.icon(
-            onPressed: () {},
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('El chat con el vendedor llegará pronto.'),
+                ),
+              );
+            },
             icon: const Icon(Icons.chat_bubble_outline),
             label: const Text('Contactar al vendedor'),
           ),

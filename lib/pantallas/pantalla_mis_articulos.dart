@@ -1,17 +1,18 @@
 // =============================================================================
 // ARCHIVO: lib/pantallas/pantalla_mis_articulos.dart
-// DESCRIPCIÓN: Pestaña "Mis artículos". Muestra las publicaciones que hizo el
-//              propio estudiante, con opciones de editar y eliminar.
-//
-// NOTA (primer avance): es SOLO VISUAL. Las opciones "Editar" y "Eliminar" del
-// menú todavía no cambian nada; la lógica llegará en la siguiente etapa.
+// DESCRIPCIÓN: Pestaña "Mis artículos". Muestra las publicaciones propias
+//              (por ahora las del vendedor provisional) con opciones de
+//              editar y eliminar, conectadas a [ArticulosProvider].
 // =============================================================================
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../datos/articulos_ejemplo.dart';
+import '../estado/articulos_provider.dart';
 import '../modelos/articulo.dart';
 import '../modelos/categoria.dart';
+import '../widgets/estado_placeholder.dart';
+import 'pantalla_publicar.dart';
 
 /// Pantalla "Mis artículos" (pestaña de la barra inferior).
 class PantallaMisArticulos extends StatelessWidget {
@@ -20,6 +21,13 @@ class PantallaMisArticulos extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ThemeData tema = Theme.of(context);
+    final ArticulosProvider proveedor = context.watch<ArticulosProvider>();
+
+    // Por ahora "míos" = los que tienen el vendedor provisional. En el
+    // Avance 9 se filtrará por la cuenta autenticada.
+    final List<Articulo> mios = proveedor.todos
+        .where((Articulo articulo) => articulo.vendedor == vendedorPropio)
+        .toList();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Mis artículos')),
@@ -30,26 +38,30 @@ class PantallaMisArticulos extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: Text(
-              'Tienes ${misArticulosEjemplo.length} publicaciones activas',
+              'Tienes ${mios.length} publicaciones activas',
               style: tema.textTheme.bodyMedium?.copyWith(
                 color: tema.colorScheme.onSurfaceVariant,
               ),
             ),
           ),
 
-          // Lista vertical de tarjetas horizontales.
+          // Lista vertical de tarjetas horizontales (o estado vacío).
           Expanded(
-            child: ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
-              itemCount: misArticulosEjemplo.length,
-              separatorBuilder: (BuildContext context, int indice) =>
-                  const SizedBox(height: 12),
-              itemBuilder: (BuildContext context, int indice) {
-                return _TarjetaMiArticulo(
-                  articulo: misArticulosEjemplo[indice],
-                );
-              },
-            ),
+            child: mios.isEmpty
+                ? const EstadoPlaceholder(
+                    icono: Icons.inventory_2_outlined,
+                    titulo: 'Aún no has publicado nada',
+                    subtitulo: 'Toca "Publicar" para crear tu primer anuncio',
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
+                    itemCount: mios.length,
+                    separatorBuilder: (BuildContext context, int indice) =>
+                        const SizedBox(height: 12),
+                    itemBuilder: (BuildContext context, int indice) {
+                      return _TarjetaMiArticulo(articulo: mios[indice]);
+                    },
+                  ),
           ),
         ],
       ),
@@ -63,6 +75,31 @@ class _TarjetaMiArticulo extends StatelessWidget {
   final Articulo articulo;
 
   const _TarjetaMiArticulo({required this.articulo});
+
+  /// Elimina el artículo después de que el usuario confirme en el diálogo.
+  Future<void> _eliminar(BuildContext context) async {
+    final bool? confirmado = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext contexto) => AlertDialog(
+        title: const Text('Eliminar artículo'),
+        content: Text('¿Eliminar "${articulo.titulo}"? Esta acción no se puede deshacer.'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(contexto).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(contexto).pop(true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmado == true && context.mounted) {
+      context.read<ArticulosProvider>().eliminar(articulo.id);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -129,10 +166,20 @@ class _TarjetaMiArticulo extends StatelessWidget {
               ),
             ),
 
-            // --------------- Menú de opciones (visual) ----------------
+            // ---------------- Menú de opciones ----------------
             PopupMenuButton<String>(
               icon: const Icon(Icons.more_vert),
-              onSelected: (_) {},
+              onSelected: (String valor) {
+                if (valor == 'editar') {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => PantallaPublicar(articulo: articulo),
+                    ),
+                  );
+                } else if (valor == 'eliminar') {
+                  _eliminar(context);
+                }
+              },
               itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
                 const PopupMenuItem<String>(
                   value: 'editar',

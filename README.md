@@ -14,13 +14,16 @@ de artículos, persistencia local SQLite y autenticación con Firebase Auth.
 ## Estado actual
 
 - **Autenticación:** crear cuenta, iniciar sesión, recuperar contraseña y
-  cerrar sesión con Firebase Authentication (correo y contraseña).
+  cerrar sesión con Firebase Authentication (correo y contraseña), más
+  **Continuar con Google** (en Android vía `google_sign_in`; en web con el
+  popup de Firebase Auth).
 - **Sesión:** Firebase conserva la sesión entre reinicios y la app abre Inicio
   cuando detecta un usuario autenticado.
-- **Artículos:** Firebase Auth no guarda artículos ni favoritos. La gestión de
-  publicaciones y su persistencia siguen separadas del inicio de sesión; todavía
-  no se sincronizan ni se asocian a una cuenta en la nube.
-- **Pruebas:** actualmente hay 2 pruebas de widgets.
+- **Artículos:** publicaciones y favoritos se guardan en SQLite local
+  (`unicambio.db`) a través de `ArticulosProvider`. Los datos de ejemplo se
+  siembran solo la primera vez que se abre la app. Aún no se sincronizan con
+  la nube ni se asocian a la cuenta de Firebase.
+- **Pruebas:** 23 pruebas (repositorio con ffi, provider y widgets).
 
 ## Cómo funciona la autenticación
 
@@ -138,6 +141,8 @@ Para ejecutar en Android, conecta un dispositivo o inicia un emulador.
    sesión. Para detener `flutter run`, escribe `q` en la terminal.
 6. En la pantalla de acceso, prueba **¿Olvidaste tu contraseña?** y revisa el
    correo para encontrar el enlace de restablecimiento.
+7. Pulsa **Continuar con Google** (requiere los pasos de Android descritos en
+   `FIREBASE_SETUP.md`).
 
 Las cuentas creadas se ven en Firebase Console, en **Authentication → Users**.
 
@@ -148,8 +153,8 @@ flutter analyze
 flutter test
 ```
 
-Al actualizar este README, las verificaciones reportadas fueron **No issues
-found!** y **All tests passed!** (2 pruebas widget presentes).
+Al actualizar este README, las verificaciones reportaron **No issues
+found!** y **All tests passed!** (23 pruebas).
 
 ## Estructura relevante
 
@@ -158,7 +163,7 @@ lib/
 ├── main.dart                         # Inicialización Firebase y puerta de sesión
 ├── firebase_options.dart             # Opciones de Firebase por plataforma (generado)
 ├── pantallas/
-│   ├── pantalla_autenticacion.dart   # Inicio, registro y recuperar contraseña
+│   ├── pantalla_autenticacion.dart   # Inicio, registro, reset y Google
 │   ├── pantalla_inicio.dart         # Inicio y acción de cerrar sesión
 │   ├── pantalla_favoritos.dart
 │   ├── pantalla_mis_articulos.dart
@@ -173,8 +178,10 @@ test/
 ## Tecnologías
 
 - Flutter y Dart (`pubspec.yaml` requiere Dart `^3.13.0`).
-- Firebase Authentication para cuentas por correo y contraseña.
+- Firebase Authentication para cuentas por correo y contraseña y con Google.
 - `firebase_core` para inicializar Firebase y `firebase_auth` para autenticación.
+- `google_sign_in` para obtener el token de Google en Android (en web se usa
+  `signInWithPopup` de `firebase_auth`).
 - SQLite (`sqflite`) para la persistencia local de artículos.
 - Provider para el estado de artículos.
 

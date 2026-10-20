@@ -12,7 +12,20 @@
           "package_name": "com.unicambio.unicambio"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "619158453000-gr7leestl9ugm1j85lgtk7l60goqhd4n.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.unicambio.unicambio",
+            "certificate_hash": "6bae4cb7669d987fbea7551138555a8f667ca925"
+          }
+        },
+        {
+          "client_id": "619158453000-nirjl7ra409r91vh5iq0k3frp3rd7ps9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBjwymFwSiAhXSwrF-_GTwbzC6rV3rHET0"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "619158453000-nirjl7ra409r91vh5iq0k3frp3rd7ps9.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

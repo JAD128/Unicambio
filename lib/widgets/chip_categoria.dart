@@ -2,8 +2,8 @@
 // ARCHIVO: lib/widgets/chip_categoria.dart
 // DESCRIPCIÓN: "Chip" (etiqueta seleccionable) que representa una categoría.
 //
-// Se usa en la fila de filtros de la pantalla de Inicio.
-// NOTA (primer avance): es SOLO VISUAL. Al tocarlo aún no filtra artículos.
+// Se usa en la fila de filtros de la pantalla de Inicio. Es "tonto": solo
+// avisa con [alSeleccionar]; quién filtra es el provider vía la pantalla.
 // =============================================================================
 
 import 'package:flutter/material.dart';
@@ -18,10 +18,14 @@ class ChipCategoria extends StatelessWidget {
   /// Indica si el chip se muestra seleccionado (resaltado).
   final bool seleccionada;
 
+  /// Se llama cuando el usuario toca el chip.
+  final VoidCallback? alSeleccionar;
+
   const ChipCategoria({
     super.key,
     this.categoria,
     this.seleccionada = false,
+    this.alSeleccionar,
   });
 
   @override
@@ -37,8 +41,7 @@ class ChipCategoria extends StatelessWidget {
         label: Text(texto),
         avatar: Icon(icono, size: 18),
         selected: seleccionada,
-        // Sin acción por ahora: el filtrado se agregará en otra etapa.
-        onSelected: (_) {},
+        onSelected: (_) => alSeleccionar?.call(),
       ),
     );
   }

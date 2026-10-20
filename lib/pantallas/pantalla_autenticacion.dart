@@ -1,5 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 /// Pantalla para iniciar sesión, crear cuenta o recuperar contraseña.
 class PantallaAutenticacion extends StatefulWidget {
@@ -53,6 +55,43 @@ class _PantallaAutenticacionState extends State<PantallaAutenticacion> {
     }
   }
 
+  /// Inicia sesión con Google. En móvil se pide el token a google_sign_in y
+  /// Firebase lo valida; en web se usa el popup nativo de Firebase Auth
+  /// (google_sign_in no soporta authenticate() en la web).
+  Future<void> _iniciarSesionConGoogle() async {
+    setState(() => _cargando = true);
+    try {
+      if (kIsWeb) {
+        await FirebaseAuth.instance.signInWithPopup(GoogleAuthProvider());
+        return;
+      }
+      final cuenta = await GoogleSignIn.instance.authenticate();
+      final idToken = cuenta.authentication.idToken;
+      if (idToken == null) {
+        _mostrarMensaje('Google no devolvió un token válido. Intenta de nuevo.');
+        return;
+      }
+      await FirebaseAuth.instance.signInWithCredential(
+        GoogleAuthProvider.credential(idToken: idToken),
+      );
+    } on GoogleSignInException catch (error) {
+      // Si el usuario cancela el selector de cuentas, no avisamos.
+      if (error.code != GoogleSignInExceptionCode.canceled) {
+        _mostrarMensaje('No se pudo iniciar sesión con Google. Intenta de nuevo.');
+      }
+    } on FirebaseAuthException catch (error) {
+      // Cerrar la ventana del popup es una cancelación, no un error.
+      if (error.code != 'popup-closed-by-user' &&
+          error.code != 'cancelled-popup-request') {
+        _mostrarMensaje(_mensajeError(error.code));
+      }
+    } catch (_) {
+      _mostrarMensaje('No se pudo iniciar sesión con Google. Intenta de nuevo.');
+    } finally {
+      if (mounted) setState(() => _cargando = false);
+    }
+  }
+
   Future<void> _recuperarContrasena() async {
     final correo = _correo.text.trim();
     if (correo.isEmpty || !correo.contains('@')) {
@@ -78,6 +117,8 @@ class _PantallaAutenticacionState extends State<PantallaAutenticacion> {
         'user-not-found' || 'wrong-password' || 'invalid-credential' =>
           'El correo o la contraseña no son correctos.',
         'email-already-in-use' => 'Ya existe una cuenta con ese correo.',
+        'account-exists-with-different-credential' =>
+          'Ya existe una cuenta con ese correo. Inicia sesión con tu contraseña.',
         'weak-password' => 'La contraseña debe tener al menos 6 caracteres.',
         'operation-not-allowed' => 'Activa el acceso por correo y contraseña en Firebase.',
         'too-many-requests' => 'Hubo demasiados intentos. Espera un momento.',
@@ -164,6 +205,27 @@ class _PantallaAutenticacionState extends State<PantallaAutenticacion> {
                     TextButton(
                       onPressed: _cargando ? null : () => setState(() => _registro = !_registro),
                       child: Text(_registro ? 'Ya tengo una cuenta · Iniciar sesión' : '¿Nuevo en UniCambio? Crear cuenta'),
+                    ),
+                    const SizedBox(height: 16),
+                    const Row(
+                      children: [
+                        Expanded(child: Divider()),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 12),
+                          child: Text('o'),
+                        ),
+                        Expanded(child: Divider()),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    OutlinedButton.icon(
+                      onPressed: _cargando ? null : _iniciarSesionConGoogle,
+                      icon: const Icon(Icons.g_mobiledata, size: 28),
+                      label: const Text('Continuar con Google'),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(52),
+                        foregroundColor: color.onSurface,
+                      ),
                     ),
                   ],
                 ),

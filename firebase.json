@@ -1,1 +1,22 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"unicambio-2f543","appId":"1:619158453000:android:7ae939c2a537ea67f3cabd","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"unicambio-2f543","configurations":{"android":"1:619158453000:android:7ae939c2a537ea67f3cabd","web":"1:619158453000:web:7c4a4c53b046b781f3cabd"}}}}}}
+{
+    "flutter": {
+        "platforms": {
+            "android": {
+                "default": {
+                    "projectId": "unicambio-2f543",
+                    "appId": "1:619158453000:android:7ae939c2a537ea67f3cabd",
+                    "fileOutput": "android/app/google-services.json"
+                }
+            },
+            "dart": {
+                "lib/firebase_options.dart": {
+                    "projectId": "unicambio-2f543",
+                    "configurations": {
+                        "android": "1:619158453000:android:7ae939c2a537ea67f3cabd",
+                        "web": "1:619158453000:web:7c4a4c53b046b781f3cabd"
+                    }
+                }
+            }
+        }
+    }
+}

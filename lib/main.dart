@@ -13,7 +13,14 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:provider/provider.dart';
 
+import 'datos/articulo_repositorio.dart';
+import 'datos/articulo_repositorio_memoria.dart';
+import 'datos/articulos_ejemplo.dart';
+import 'datos/semilla.dart';
+import 'estado/articulos_provider.dart';
 import 'firebase_options.dart';
 import 'pantallas/pantalla_autenticacion.dart';
 import 'pantallas/pantalla_favoritos.dart';
@@ -33,7 +40,39 @@ Future<void> main() async {
   } catch (error) {
     errorFirebase = error;
   }
-  runApp(UniCambioApp(errorFirebase: errorFirebase));
+
+  // google_sign_in 7.x exige inicializarse exactamente una vez antes de usarlo.
+  // Si falla, el botón de Google lo notificará al intentar usarse.
+  try {
+    await GoogleSignIn.instance.initialize();
+  } catch (_) {}
+
+  // Prepara los datos: SQLite en plataformas con sqflite (Android/iOS);
+  // si no está disponible (p. ej. web o escritorio), usa la lista en memoria
+  // para que la interfaz siga siendo navegable.
+  final ArticuloRepositorio repositorio = await _crearRepositorio();
+  final ArticulosProvider proveedorArticulos = ArticulosProvider(repositorio);
+  await proveedorArticulos.iniciar();
+
+  runApp(
+    ChangeNotifierProvider<ArticulosProvider>.value(
+      value: proveedorArticulos,
+      child: UniCambioApp(errorFirebase: errorFirebase),
+    ),
+  );
+}
+
+/// Crea el repositorio que usará toda la app y siembra los datos de ejemplo
+/// (la siembra solo actúa si la base de datos está vacía).
+Future<ArticuloRepositorio> _crearRepositorio() async {
+  try {
+    final ArticuloRepositorioSqflite repositorio = ArticuloRepositorioSqflite();
+    await sembrarDatosDeEjemplo(repositorio);
+    return repositorio;
+  } catch (_) {
+    // sqflite no corre en web/escritorio sin ffi: caemos a memoria.
+    return ArticuloRepositorioMemoria(iniciales: articulosEjemplo);
+  }
 }
 
 /// Widget raíz de UniCambio.

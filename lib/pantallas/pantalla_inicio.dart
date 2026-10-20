@@ -2,22 +2,24 @@
 // ARCHIVO: lib/pantallas/pantalla_inicio.dart
 // DESCRIPCIÓN: Pantalla principal de UniCambio. Muestra:
 //   - Un saludo al estudiante.
-//   - La barra de búsqueda.
+//   - La barra de búsqueda (filtra por título en tiempo real).
 //   - La fila de filtros por categoría.
-//   - La cuadrícula con los artículos de ejemplo.
+//   - La cuadrícula con los artículos de la base de datos (vía provider).
 //
-// NOTA (primer avance): la búsqueda y los filtros son SOLO VISUALES. Al tocar
-// una tarjeta sí se abre el detalle, porque eso es navegación básica.
+// Los datos llegan de [ArticulosProvider]: esta pantalla solo observa el estado
+// (`context.watch`) y envía acciones (`context.read`); nunca toca SQLite.
 // =============================================================================
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
 
-import '../datos/articulos_ejemplo.dart';
+import '../estado/articulos_provider.dart';
 import '../modelos/articulo.dart';
 import '../modelos/categoria.dart';
 import '../widgets/campo_busqueda.dart';
 import '../widgets/chip_categoria.dart';
+import '../widgets/estado_placeholder.dart';
 import '../widgets/tarjeta_articulo.dart';
 import 'pantalla_detalle_articulo.dart';
 
@@ -25,18 +27,11 @@ import 'pantalla_detalle_articulo.dart';
 class PantallaInicio extends StatelessWidget {
   const PantallaInicio({super.key});
 
-  /// Abre la pantalla de detalle para el [articulo] seleccionado.
-  void _abrirDetalle(BuildContext context, Articulo articulo) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => PantallaDetalleArticulo(articulo: articulo),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final ThemeData tema = Theme.of(context);
+    // Observa el provider: cada cambio (búsqueda, filtro, favorito...) redibuja.
+    final ArticulosProvider proveedor = context.watch<ArticulosProvider>();
 
     return Scaffold(
       appBar: AppBar(
@@ -74,7 +69,11 @@ class PantallaInicio extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 14),
-                const CampoBusqueda(),
+                CampoBusqueda(
+                  textoInicial: proveedor.textoBusqueda,
+                  alCambiar: (String texto) =>
+                      context.read<ArticulosProvider>().actualizarBusqueda(texto),
+                ),
               ],
             ),
           ),
@@ -86,11 +85,22 @@ class PantallaInicio extends StatelessWidget {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
               children: <Widget>[
-                // El chip "Todos" se muestra seleccionado por defecto.
-                const ChipCategoria(seleccionada: true),
+                // Chip "Todos": se marca cuando no hay categoría elegida.
+                ChipCategoria(
+                  seleccionada: proveedor.categoriaSeleccionada == null,
+                  alSeleccionar: () => context
+                      .read<ArticulosProvider>()
+                      .seleccionarCategoria(null),
+                ),
                 // Un chip por cada categoría disponible.
                 ...Categoria.values.map(
-                  (Categoria categoria) => ChipCategoria(categoria: categoria),
+                  (Categoria categoria) => ChipCategoria(
+                    categoria: categoria,
+                    seleccionada: proveedor.categoriaSeleccionada == categoria,
+                    alSeleccionar: () => context
+                        .read<ArticulosProvider>()
+                        .seleccionarCategoria(categoria),
+                  ),
                 ),
               ],
             ),
@@ -109,29 +119,67 @@ class PantallaInicio extends StatelessWidget {
           ),
           const SizedBox(height: 10),
 
-          // --------------- Cuadrícula de artículos de ejemplo -----------
-          Expanded(
-            child: GridView.builder(
-              // Relleno inferior para que el botón "Publicar" no tape tarjetas.
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 0.72,
-              ),
-              itemCount: articulosEjemplo.length,
-              itemBuilder: (BuildContext context, int indice) {
-                final Articulo articulo = articulosEjemplo[indice];
-                return TarjetaArticulo(
-                  articulo: articulo,
-                  alTocar: () => _abrirDetalle(context, articulo),
-                );
-              },
-            ),
-          ),
+          // ----------------- Cuadrícula (o estado vacío) ----------------
+          Expanded(child: _CuerpoLista(proveedor: proveedor)),
         ],
       ),
+    );
+  }
+}
+
+/// Muestra la lista de artículos o el estado que corresponda:
+/// carga, error, vacío o resultados.
+class _CuerpoLista extends StatelessWidget {
+  final ArticulosProvider proveedor;
+
+  const _CuerpoLista({required this.proveedor});
+
+  @override
+  Widget build(BuildContext context) {
+    if (proveedor.cargando) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (proveedor.error != null) {
+      return EstadoPlaceholder(
+        icono: Icons.error_outline,
+        titulo: 'No se pudieron cargar los artículos',
+        subtitulo: proveedor.error,
+      );
+    }
+    if (proveedor.listaVacia) {
+      return const EstadoPlaceholder(
+        icono: Icons.search_off,
+        titulo: 'No hay artículos',
+        subtitulo: 'Publica el primero o prueba otra búsqueda.',
+      );
+    }
+
+    // Relleno inferior para que el botón "Publicar" no tape tarjetas.
+    return GridView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 0.72,
+      ),
+      itemCount: proveedor.articulos.length,
+      itemBuilder: (BuildContext context, int indice) {
+        final Articulo articulo = proveedor.articulos[indice];
+        return TarjetaArticulo(
+          articulo: articulo,
+          alTocar: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => PantallaDetalleArticulo(articulo: articulo),
+              ),
+            );
+          },
+          alTocarFavorito: () => context
+              .read<ArticulosProvider>()
+              .alternarFavorito(articulo.id),
+        );
+      },
     );
   }
 }

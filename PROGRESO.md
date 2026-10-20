@@ -3,7 +3,7 @@
 > Documento de contexto y bitácora. Léelo completo al retomar el trabajo para
 > no perder el hilo. Actualízalo al cerrar cada avance.
 
-Última actualización: cierre del **avance de persistencia local (SQLite) + lógica funcional**.
+Última actualización: cierre del **avance de reconexión UI → provider → SQLite** (tras detectar que la implementación del Avance 6 desconectó la UI de la capa de datos).
 
 ---
 
@@ -15,10 +15,7 @@
 - Directorio: `C:\Users\juand\Desktop\U\10mo\Desarrollo movil\Proyecto_Unicambio`
 - Paquete Dart: `unicambio` · organización `com.unicambio`
 - Plataformas habilitadas: `android`, `web`
-- Flutter 3.47.6 · Dart SDK `^3.13.5`
-
-El proyecto tiene dos avances previos de interfaz ya cerrados y ahora una
-capa de datos local. **Todavía no hay login ni backend en la nube.**
+- Flutter 3.47.6 · Dart SDK `^3.13.0`
 
 ---
 
@@ -26,12 +23,20 @@ capa de datos local. **Todavía no hay login ni backend en la nube.**
 
 | Avance | Alcance | Estado |
 |---|---|---|
-| 1 — Interfaz visual | 5 pantallas, tema Material 3, datos de ejemplo en memoria | ✅ Hecho |
+| 1 — Interfaz visual | 5 pantallas, tema Material 3 | ✅ Hecho |
 | 2 — Persistencia local | Modelo + SQLite (`sqflite`) + repositorio | ✅ Hecho |
 | 3 — Estado global | `ArticulosProvider` (provider / ChangeNotifier) | ✅ Hecho |
-| 4 — Conectar la UI | Pantallas leyendo/escribiendo por el provider | ✅ Hecho |
+| 4 — Conectar la UI | Pantallas leyendo/escribiendo por el provider | ✅ Hecho (reconectado) |
 | 5 — Pruebas | Repositorio (ffi) + provider + widgets | ✅ Hecho |
-| 6 — Pendiente | Login y/o nube (Firebase/Supabase) | ⛔ No iniciado |
+| 6 — Autenticación | Firebase Auth (correo/contraseña + Google, sesión, reset) | ✅ Hecho |
+| 7 — Backend/nube | `ArticuloRepositorioNube` + favoritos por usuario | ⛔ No iniciado |
+
+> **Incidente del Avance 6**: al implementar la autenticación se reescribieron
+> `main.dart` y las pantallas usando datos de ejemplo estáticos
+> (`articulosEjemplo`), desconectando la UI del provider/SQLite. Se detectó
+> analizando el código (no existía `ChangeNotifierProvider` en `lib/`) y se
+> corrigió reconectando todo. Los archivos de datos/provider nunca se
+> borraron; solo faltaba el cableado.
 
 Verificación más reciente:
 
@@ -55,7 +60,20 @@ flutter test      # -> All tests passed!  (23 pruebas)
 - Navegación inferior: Inicio / Favoritos / Mis artículos.
 - Botón flotante **Publicar**.
 
-Pendiente para el siguiente avance: autenticación, nube, fotos reales.
+Pendiente para el siguiente avance: nube, fotos reales.
+
+## 3.1 Funcionalidades de la autenticación (Avance 6)
+
+- Crear cuenta, iniciar sesión, recuperar contraseña y cerrar sesión
+  (Firebase Auth, correo/contraseña).
+- **Continuar con Google**: en Android `google_sign_in` 7.x
+  (`initialize()` en `main()`, luego `authenticate()` → `idToken` →
+  `GoogleAuthProvider.credential` → `signInWithCredential`); en web
+  `signInWithPopup(GoogleAuthProvider())` (el `authenticate()` de
+  google_sign_in no existe en web). Configuración manual: `FIREBASE_SETUP.md`.
+- La sesión persiste entre reinicios; `main.dart` abre Inicio si hay sesión.
+- El registro guarda el nombre como `displayName` (se muestra en el saludo).
+- Errores de Firebase traducidos a mensajes en español.
 
 ---
 
@@ -88,14 +106,15 @@ Reglas de oro:
 ```
 Proyecto_Unicambio/
 ├── lib/
-│   ├── main.dart                          # Arranque: ffi/sqflite + semilla + provider + navegación
+│   ├── main.dart                          # Arranque: Firebase + repo (ffi/sqflite o memoria) + semilla + provider
+│   ├── firebase_options.dart              # Opciones Firebase por plataforma (GENERADO; no editar a mano)
 │   ├── modelos/
-│   │   ├── articulo.dart                  # Articulo + enum TipoPublicacion (+ copyWith/toMap/fromMap/precioTexto)
+│   │   ├── articulo.dart                  # Articulo + enum TipoPublicacion + vendedorPropio
 │   │   └── categoria.dart                 # enum Categoria + extensión UI (etiqueta, icono)
 │   ├── datos/
 │   │   ├── base_datos.dart                # Singleton BaseDatos: abre unicambio.db y crea la tabla
 │   │   ├── articulo_repositorio.dart      # Interfaz ArticuloRepositorio + ArticuloRepositorioSqflite
-│   │   ├── articulo_repositorio_memoria.dart  # Implementación en RAM (pruebas)
+│   │   ├── articulo_repositorio_memoria.dart  # Implementación en RAM (pruebas y web)
 │   │   ├── semilla.dart                   # sembrarDatosDeEjemplo(): siembra solo si la BD está vacía
 │   │   └── articulos_ejemplo.dart         # Lista articulosEjemplo (8) — solo para la semilla
 │   ├── estado/
@@ -103,18 +122,19 @@ Proyecto_Unicambio/
 │   ├── tema/
 │   │   └── tema_app.dart                  # Tema Material 3
 │   ├── widgets/
-│   │   ├── campo_busqueda.dart            # Barra de búsqueda (onChanged -> buscar)
-│   │   ├── chip_categoria.dart            # Chip seleccionable de categoría
+│   │   ├── campo_busqueda.dart            # Barra de búsqueda (callback alCambiar)
+│   │   ├── chip_categoria.dart            # Chip seleccionable (callback alSeleccionar)
 │   │   ├── estado_placeholder.dart        # Mensaje centrado (vacío / error)
 │   │   └── tarjeta_articulo.dart          # Tarjeta (imagen, insignia, favorito, precio)
 │   └── pantallas/
+│       ├── pantalla_autenticacion.dart    # Inicio, registro, reset y Google (Firebase)
 │       ├── pantalla_inicio.dart           # Inicio: buscador + chips + cuadrícula + estados
-│       ├── pantalla_favoritos.dart        # Favoritos
-│       ├── pantalla_mis_articulos.dart    # Mis artículos (Editar/Eliminar con confirmación)
-│       ├── pantalla_detalle_articulo.dart # Detalle (favorito + contacto vía SnackBar)
-│       └── pantalla_publicar.dart         # Formulario crear/editar (StatefulWidget)
+│       ├── pantalla_favoritos.dart        # Favoritos (desde provider)
+│       ├── pantalla_mis_articulos.dart    # Mis artículos: editar/eliminar con confirmación
+│       ├── pantalla_detalle_articulo.dart # Detalle (favorito conectado)
+│       └── pantalla_publicar.dart         # Formulario crear/editar (validado)
 └── test/
-    ├── widget_test.dart                   # 2 pruebas de humo (UI)
+    ├── widget_test.dart                   # 2 pruebas de humo (UI con provider en memoria)
     ├── articulos_provider_test.dart       # 10 pruebas del estado global
     └── articulo_repositorio_test.dart     # 11 pruebas de SQLite (con ffi)
 ```
@@ -168,8 +188,9 @@ Archivo de la BD: `unicambio.db` (vía `getDatabasesPath()`).
 `buscar(texto, {categoria})`, `filtrarPorCategoria(categoria)`.
 
 **`ArticulosProvider`** (`lib/estado/articulos_provider.dart`):
-- Getters: `todos`, `articulos` (filtrados), `favoritos`, `cargando`, `error`,
-  `textoBusqueda`, `categoriaSeleccionada`, `listaVacia`, `articuloPorId(id)`.
+- Getters: `todos` (sin filtrar), `articulos` (filtrados), `favoritos`,
+  `cargando`, `error`, `textoBusqueda`, `categoriaSeleccionada`, `listaVacia`,
+  `articuloPorId(id)`.
 - Métodos: `iniciar()`, `actualizarBusqueda(texto)`,
   `seleccionarCategoria(categoria?)`, `insertar(a)`, `actualizar(a)`,
   `eliminar(id)`, `alternarFavorito(id)`.
@@ -220,8 +241,13 @@ favorito → publicar artículo → editar/eliminar en "Mis artículos".
 - **Idioma**: el usuario habla español; responder en español, conciso y práctico.
 - **Entrega por fases**: entregar cada fase completa (archivos + `flutter
   analyze` + `flutter test`), sin pedir confirmación en cada micro-paso.
-- **Sin login ni nube todavía.** Datos de ejemplo (8 artículos, ids `a1`–`a8`)
-  se siembran **solo la primera vez** (si la tabla está vacía).
+- **Sin nube todavía.** Datos de ejemplo (8 artículos, ids `a1`–`a8`)
+  se siembran **solo la primera vez** (si la tabla está vacía). En
+  plataformas sin SQLite (web/escritorio) `main.dart` usa
+  `ArticuloRepositorioMemoria` con los mismos datos de ejemplo como respaldo.
+- **"Mis artículos"** filtra por `vendedor == 'Tú (estudiante)'`
+  (`vendedorPropio` en `lib/modelos/articulo.dart`); en el Avance 9 se
+  reemplazará por la cuenta autenticada.
 - **Agregar dependencias** es válido si hace falta (ya se hizo con sqflite,
   provider, ffi), pero avisar/justificar.
 
@@ -246,13 +272,17 @@ favorito → publicar artículo → editar/eliminar en "Mis artículos".
 > avance, acordar el alcance con el usuario y entregar por fases con
 > `flutter analyze` + `flutter test` en verde.
 
-### Avance 6 — Autenticación de usuarios
+### Avance 6 — Autenticación de usuarios ✅ HECHO
 - Login y registro (correo/contraseña), recuperar contraseña, cerrar sesión.
-- Paquete sugerido: **Firebase Auth**.
-- Pantallas nuevas: `login`, `registro`, `recuperar_password`, `perfil`.
-- `main.dart` decide qué mostrar: si hay sesión → app; si no → login.
-- Guardar la sesión entre reinicios (persistencia del token).
-- Estado: ⛔ No iniciado.
+- **Continuar con Google** (`google_sign_in` 7.2.0 en Android;
+  `signInWithPopup` en web). Pendiente de configuración manual:
+  habilitar proveedor Google, SHA-1 y `google-services.json` actualizado
+  (el actual tiene `oauth_client: []`). Ver `FIREBASE_SETUP.md`.
+- Firebase Auth; sesión persistente; `displayName` en el saludo.
+- Pantalla: `pantalla_autenticacion.dart`; puerta en `main.dart`
+  (`_PuertaAutenticacion` con `authStateChanges()`).
+- Configuración compilada: proyecto `unicambio-2f543`, apps Android/Web.
+  Ver `FIREBASE_SETUP.md` y la sección de Firebase del `README.md`.
 
 ### Avance 7 — Backend / nube (sincronización)
 - Crear **`ArticuloRepositorioNube`** implementando `ArticuloRepositorio`
@@ -309,7 +339,10 @@ favorito → publicar artículo → editar/eliminar en "Mis artículos".
 - Los "ids" se generan con la hora (`art_<microsegundos>`); en la nube conviene
   dejar que el backend asigne el id.
 - No hay manejo de estado de conexión (offline) todavía.
-- `ArticuloRepositorioMemoria` se usa solo en pruebas (no en la app).
+- `ArticuloRepositorioMemoria` se usa en pruebas y como respaldo en
+  plataformas sin SQLite (web/escritorio); la app en Android usa Sqflite.
+- "Mis artículos" se filtra por el vendedor provisional `vendedorPropio`, no
+  por la cuenta de Firebase → resolver en Avance 9.
 
 Al empezar el próximo avance: revisar esta sección, acordar el alcance y volver
 a entregar por fases con `analyze` + `test` en verde.

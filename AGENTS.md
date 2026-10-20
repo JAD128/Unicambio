@@ -32,8 +32,17 @@ Pantallas --context.watch/read--> ArticulosProvider (ChangeNotifier)
 - La UI **nunca** toca SQLite; el provider **nunca** ve SQL. Migrar a la nube =
   nueva implementación del repositorio + cambiarla en `main.dart`; las
   pantallas no se tocan.
-- `main.dart` crea el repositorio, siembra datos de ejemplo (solo si la BD está
-  vacía) y arranca la app con el provider.
+- `main.dart` crea el repositorio (Sqflite, o `ArticuloRepositorioMemoria`
+  como respaldo si sqflite falla — p. ej. web), siembra datos de ejemplo
+  (solo si la BD está vacía), llama `provider.iniciar()` y arranca la app con
+  `ChangeNotifierProvider`.
+- **Al editar pantallas: mantener el provider como única fuente de datos.**
+  En el Avance 6 se reescribieron pantallas usando `articulosEjemplo` directo
+  y se desconectó la UI sin que analyze/test lo delataran; verificar tras
+  cambios grandes que `ChangeNotifierProvider` siga en `main.dart` y las
+  pantallas usen `context.watch/read<ArticulosProvider>()`.
+- "Mis artículos" filtra por `vendedorPropio` ('Tú (estudiante)'), no por la
+  sesión de Firebase (Avance 9).
 - API y getters exactos: ver `PROGRESO.md` §7 antes de tocar provider o
   repositorio.
 
