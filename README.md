@@ -1,3 +1,10 @@
+JULIO ANDRÉS DIAZ MAIGUAL
+PAULA VANESSA LEÓN ERAZO
+
+
+Documentación en README
+
+
 # UniCambio
 
 Aplicación Flutter para estudiantes universitarios que permite publicar
