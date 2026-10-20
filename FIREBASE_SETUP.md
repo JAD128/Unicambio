@@ -24,8 +24,10 @@ las gestiona Firebase y no se guardan en UniCambio.
 
 La pantalla de acceso incluye un botón **Continuar con Google**. En móvil se
 usa el paquete `google_sign_in` (devuelve un token que Firebase valida); en web
-se usa `signInWithPopup` de `firebase_auth`. Solo en Android hay pasos
-manuales:
+se usa `signInWithPopup` de `firebase_auth`. **Ya está configurado y probado**
+(proveedor activo, SHA-1 registrado y `google-services.json` con
+`oauth_client`). Los pasos quedan documentados por si se configura otro equipo
+o se cambia la huella:
 
 1. **Activa el proveedor**: en Firebase Console → **Authentication → Sign-in
    method** → **Google** → **Habilitar** → Guardar.
@@ -42,9 +44,9 @@ manuales:
    **SHA certificate fingerprints → Add fingerprint**.
 
 3. **Vuelve a descargar `google-services.json`** desde Project settings y
-   reemplaza `android/app/google-services.json`. El archivo actual está
-   generado con `"oauth_client": []` (sin cliente web OAuth); sin ese cliente
-   el plugin no puede pedir el token de Google. El archivo nuevo lo incluye.
+   reemplaza `android/app/google-services.json`. Debe incluir un bloque
+   `"oauth_client"` con el cliente Android (si está vacío, el plugin no puede
+   pedir el token de Google).
 
 4. Aplica el cambio con:
 

@@ -142,8 +142,8 @@ Para ejecutar en Android, conecta un dispositivo o inicia un emulador.
    sesión. Para detener `flutter run`, escribe `q` en la terminal.
 6. En la pantalla de acceso, prueba **¿Olvidaste tu contraseña?** y revisa el
    correo para encontrar el enlace de restablecimiento.
-7. Pulsa **Continuar con Google** (requiere los pasos de Android descritos en
-   `FIREBASE_SETUP.md`).
+7. Pulsa **Continuar con Google** (ya configurado y probado; los pasos quedan
+   en `FIREBASE_SETUP.md`).
 8. Publica un artículo con el botón **Publicar**: aparecerá también en la
    cuenta de otro usuario (Firestore). Marca favoritos en una cuenta y
    comprueba que no aparecen en la otra.

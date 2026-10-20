@@ -278,9 +278,9 @@ favorito → publicar artículo → editar/eliminar en "Mis artículos".
 ### Avance 6 — Autenticación de usuarios ✅ HECHO
 - Login y registro (correo/contraseña), recuperar contraseña, cerrar sesión.
 - **Continuar con Google** (`google_sign_in` 7.2.0 en Android;
-  `signInWithPopup` en web). Pendiente de configuración manual:
-  habilitar proveedor Google, SHA-1 y `google-services.json` actualizado
-  (el actual tiene `oauth_client: []`). Ver `FIREBASE_SETUP.md`.
+  `signInWithPopup` en web). Configuración completada y probada por la
+  usuaria: proveedor Google activo, SHA-1 de depuración registrado y
+  `google-services.json` con `oauth_client`. Ver `FIREBASE_SETUP.md`.
 - Firebase Auth; sesión persistente; `displayName` en el saludo.
 - Pantalla: `pantalla_autenticacion.dart`; puerta en `main.dart`
   (`_PuertaAutenticacion` con `authStateChanges()`).
