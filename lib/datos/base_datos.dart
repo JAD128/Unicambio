@@ -32,7 +32,7 @@ class BaseDatos {
 
   /// Versión del esquema. Se sube cada vez que cambie la estructura de tablas
   /// y se maneja en [openDatabase] con `onUpgrade`.
-  static const int version = 1;
+  static const int version = 2;
 
   /// Nombre de la tabla de artículos (la usan los repositorios).
   static const String tablaArticulos = 'articulos';
@@ -76,7 +76,8 @@ class BaseDatos {
         categoria   TEXT    NOT NULL,
         tipo        TEXT    NOT NULL,
         vendedor    TEXT    NOT NULL,
-        esFavorito  INTEGER NOT NULL DEFAULT 0
+        esFavorito  INTEGER NOT NULL DEFAULT 0,
+        imagenUrl   TEXT
       )
     ''');
   }
@@ -89,10 +90,9 @@ class BaseDatos {
     int versionAnterior,
     int versionNueva,
   ) async {
-    // Ejemplo para más adelante:
-    // if (versionAnterior < 2) {
-    //   await db.execute('ALTER TABLE $tablaArticulos ADD COLUMN ubicacion TEXT');
-    // }
+    if (versionAnterior < 2) {
+      await db.execute('ALTER TABLE $tablaArticulos ADD COLUMN imagenUrl TEXT');
+    }
   }
 
   /// Cierra la conexión (útil al hacer logout o en pruebas).

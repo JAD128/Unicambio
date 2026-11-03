@@ -34,7 +34,7 @@ manuales:
    inicio de sesión con Google). En PowerShell ejecuta:
 
    ```powershell
-   keytool -list -v -keystore "$env:USERPROFILE\android\debug.keystore" -alias androiddebugkey -storepass android -keypass android | Select-String "SHA1"
+   keytool -list -v -keystore "$env:USERPROFILE\.android\debug.keystore" -alias androiddebugkey -storepass android -keypass android | Select-String "SHA1"
    ```
 
    Copia el valor (formato `AA:BB:CC:...`) y en **Project settings → Your
@@ -59,3 +59,11 @@ popup de Google funciona con el cliente web que ya tiene Firebase.
 Si en Android aparece un error de cancelación tras elegir la cuenta o un
 mensaje `clientConfigurationError`, revisa los pasos 1–3 (casi siempre es el
 SHA-1 o un `google-services.json` desactualizado).
+
+
+## Fotos de artículos (Avance 8)
+
+1. En Firebase Console del proyecto `unicambio-2f543`, activa **Storage** y crea el bucket. Cloud Storage for Firebase requiere el plan Blaze; revisa el uso y presupuesto del proyecto antes de habilitar cargas.
+2. Publica `storage.rules` desde la consola o con `firebase deploy --only storage`. Las reglas requieren sesión, limitan las cargas a la carpeta del usuario autenticado, aceptan imágenes y fijan un máximo de 5 MB.
+3. Instala dependencias con `flutter pub get`. La app permite elegir de galería o cámara, muestra una vista previa y sube la imagen al guardar. La URL se guarda en `imagenUrl`.
+4. Las instalaciones SQLite existentes migran automáticamente del esquema 1 al 2, agregando la columna opcional `imagenUrl`.

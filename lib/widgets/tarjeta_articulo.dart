@@ -161,6 +161,14 @@ class _ImagenArticulo extends StatelessWidget {
           ),
         ),
 
+        if (articulo.imagenUrl != null)
+          Image.network(
+            articulo.imagenUrl!,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) =>
+                const SizedBox.shrink(),
+          ),
+
         // Insignia del tipo de publicación (arriba a la izquierda).
         Positioned(
           top: 8,

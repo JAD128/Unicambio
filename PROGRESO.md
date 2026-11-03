@@ -3,7 +3,7 @@
 > Documento de contexto y bitácora. Léelo completo al retomar el trabajo para
 > no perder el hilo. Actualízalo al cerrar cada avance.
 
-Última actualización: cierre del **avance de reconexión UI → provider → SQLite** (tras detectar que la implementación del Avance 6 desconectó la UI de la capa de datos).
+Última actualización: cierre del **Avance 8 — fotos reales de los artículos**.
 
 ---
 
@@ -30,6 +30,7 @@
 | 5 — Pruebas | Repositorio (ffi) + provider + widgets | ✅ Hecho |
 | 6 — Autenticación | Firebase Auth (correo/contraseña + Google, sesión, reset) | ✅ Hecho |
 | 7 — Backend/nube | `ArticuloRepositorioNube` + favoritos por usuario | ⛔ No iniciado |
+| 8 — Fotos reales | Selector, Firebase Storage, URL y migración SQLite | ✅ Hecho |
 
 > **Incidente del Avance 6**: al implementar la autenticación se reescribieron
 > `main.dart` y las pantallas usando datos de ejemplo estáticos
@@ -299,7 +300,8 @@ favorito → publicar artículo → editar/eliminar en "Mis artículos".
 - Subir a almacenamiento (Firebase Storage / Supabase Storage) y guardar la URL
   en el artículo (nuevo campo `imagenUrl` + migración de esquema, subir `version`).
 - Reemplazar la "imagen simulada" (degradado + ícono) por la foto real.
-- Estado: ⛔ No iniciado.
+- Estado: ✅ Implementado. Requiere habilitar Firebase Storage y publicar
+  `storage.rules` en el proyecto para subir imágenes.
 
 ### Avance 9 — Perfil de usuario y vendedor real
 - Hoy los artículos nuevos usan vendedor `'Tú (estudiante)'` (placeholder).
@@ -377,3 +379,21 @@ La nota anterior sobre la verificación pendiente quedó superada al repetir los
 comandos: análisis y pruebas terminaron correctamente.
 
 Configuración Firebase completada por la usuaria: proyecto `unicambio-2f543`, apps Android/Web. FlutterFire generó `lib/firebase_options.dart`, `android/app/google-services.json` y aplicó el plugin de Google Services a Gradle. `main.dart` ahora inicializa desde `DefaultFirebaseOptions.currentPlatform`; ya no se requieren defines de compilación. Falta activar Email/Password en Firebase Console antes de usar registro/inicio. Guía actualizada en `FIREBASE_SETUP.md`.
+  
+
+Diagnostico Google Android (2026-11-02): la huella SHA-1 del keystore local de depuracion es 7F:7A:90:F3:7C:61:0D:1B:E6:D0:2E:FE:38:D2:DE:A3:91:D3:56:1B, pero google-services.json contiene 6B:AE:4C:B7:66:9D:98:7F:BE:A7:55:11:35:85:A8:F6:67:CA:92:51. Registrar la huella local en Firebase, verificar que Google este habilitado y volver a descargar google-services.json. FIREBASE_SETUP.md contiene el procedimiento corregido.
+
+## Actualización — Avance 8: fotos reales de los artículos
+
+El formulario permite elegir una imagen de la galería o tomarla con la cámara,
+ver una vista previa, reemplazarla o quitarla. Al guardar, la imagen se carga a
+Firebase Storage en una ruta asociada al usuario y al artículo; la URL se
+persiste en `Articulo.imagenUrl` y SQLite. Las tarjetas y el detalle muestran
+la imagen descargada. El esquema SQLite subió a versión 2 con una migración
+que agrega la columna opcional `imagenUrl` a bases existentes. Se añadieron
+reglas de Storage con acceso autenticado, límite de 5 MB y solo imágenes.
+
+Verificación del Avance 8: `flutter pub get` completado, `flutter analyze`
+terminó con `No issues found!` y `flutter test` con `All tests passed!` (23
+pruebas). Para cargas reales todavía hay que crear/activar el bucket de Storage
+en Firebase y publicar `storage.rules`; pasos en `FIREBASE_SETUP.md`.

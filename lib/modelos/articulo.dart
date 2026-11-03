@@ -93,6 +93,9 @@ class Articulo {
   /// Indica si el artículo está marcado como favorito (dato de ejemplo).
   final bool esFavorito;
 
+  /// URL de la imagen guardada en Firebase Storage, si el artículo tiene foto.
+  final String? imagenUrl;
+
   /// Constructor constante: permite crear artículos de ejemplo sin costo extra.
   const Articulo({
     required this.id,
@@ -103,6 +106,7 @@ class Articulo {
     required this.tipo,
     required this.vendedor,
     this.esFavorito = false,
+    this.imagenUrl,
   });
 
   /// Crea una copia del artículo cambiando solo los campos que se indiquen.
@@ -119,6 +123,8 @@ class Articulo {
     TipoPublicacion? tipo,
     String? vendedor,
     bool? esFavorito,
+    String? imagenUrl,
+    bool borrarImagen = false,
   }) {
     return Articulo(
       id: id ?? this.id,
@@ -129,6 +135,7 @@ class Articulo {
       tipo: tipo ?? this.tipo,
       vendedor: vendedor ?? this.vendedor,
       esFavorito: esFavorito ?? this.esFavorito,
+      imagenUrl: borrarImagen ? null : imagenUrl ?? this.imagenUrl,
     );
   }
 
@@ -147,6 +154,7 @@ class Articulo {
       'tipo': tipo.name,
       'vendedor': vendedor,
       'esFavorito': esFavorito ? 1 : 0,
+      'imagenUrl': imagenUrl,
     };
   }
 
@@ -165,6 +173,7 @@ class Articulo {
       tipo: TipoPublicacion.values.byName(map['tipo'] as String),
       vendedor: map['vendedor'] as String,
       esFavorito: (map['esFavorito'] as int) == 1,
+      imagenUrl: map['imagenUrl'] as String?,
     );
   }
 

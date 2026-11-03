@@ -169,12 +169,24 @@ class _CabeceraImagen extends StatelessWidget {
           ],
         ),
       ),
-      child: Center(
-        child: Icon(
-          articulo.categoria.icono,
-          size: 96,
-          color: Colors.white.withValues(alpha: 0.9),
-        ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: <Widget>[
+          Center(
+            child: Icon(
+              articulo.categoria.icono,
+              size: 96,
+              color: Colors.white.withValues(alpha: 0.9),
+            ),
+          ),
+          if (articulo.imagenUrl != null)
+            Image.network(
+              articulo.imagenUrl!,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) =>
+                  const SizedBox.shrink(),
+            ),
+        ],
       ),
     );
   }
