@@ -1,13 +1,14 @@
 // =============================================================================
 // ARCHIVO: lib/pantallas/pantalla_mis_articulos.dart
 // DESCRIPCIÓN: Pestaña "Mis artículos". Muestra las publicaciones propias
-//              (por ahora las del vendedor provisional) con opciones de
-//              editar y eliminar, conectadas a [ArticulosProvider].
+//              (las de la cuenta autenticada) con opciones de editar y
+//              eliminar, conectadas a [ArticulosProvider].
 // =============================================================================
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../datos/almacenamiento_imagenes.dart';
 import '../estado/articulos_provider.dart';
 import '../modelos/articulo.dart';
 import '../modelos/categoria.dart';
@@ -23,11 +24,8 @@ class PantallaMisArticulos extends StatelessWidget {
     final ThemeData tema = Theme.of(context);
     final ArticulosProvider proveedor = context.watch<ArticulosProvider>();
 
-    // Por ahora "míos" = los que tienen el vendedor provisional. En el
-    // Avance 9 se filtrará por la cuenta autenticada.
-    final List<Articulo> mios = proveedor.todos
-        .where((Articulo articulo) => articulo.vendedor == vendedorPropio)
-        .toList();
+    // "Míos" = publicados por la cuenta autenticada (filtra por uidAutor).
+    final List<Articulo> mios = proveedor.mios;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Mis artículos')),
@@ -97,7 +95,15 @@ class _TarjetaMiArticulo extends StatelessWidget {
     );
 
     if (confirmado == true && context.mounted) {
-      context.read<ArticulosProvider>().eliminar(articulo.id);
+      final ArticulosProvider proveedor = context.read<ArticulosProvider>();
+      await proveedor.eliminar(articulo.id);
+      if (proveedor.error == null && articulo.imagenUrl != null) {
+        try {
+          await AlmacenamientoImagenes().eliminar(articulo.imagenUrl);
+        } catch (_) {
+          // Si falla el borrado de la foto, el artículo ya se eliminó igual.
+        }
+      }
     }
   }
 

@@ -107,4 +107,52 @@ void main() {
       ),
     );
   });
+
+  test('eliminar borra el archivo indicado por su URL pública', () async {
+    late http.Request peticion;
+    final MockClient cliente = MockClient((http.Request request) async {
+      peticion = request;
+      return http.Response('', 200);
+    });
+    final AlmacenamientoImagenes almacenamiento = AlmacenamientoImagenes(
+      cliente: cliente,
+      uidActual: () => 'uid123',
+      url: 'https://proyecto.supabase.co/',
+      clave: 'anon-key',
+    );
+
+    await almacenamiento.eliminar(
+      'https://proyecto.supabase.co/storage/v1/object/public/'
+      'articulos/uid123/art1/foto.png',
+    );
+
+    expect(peticion.method, 'DELETE');
+    expect(
+      peticion.url.path,
+      '/storage/v1/object/articulos/uid123/art1/foto.png',
+    );
+    expect(peticion.headers['authorization'], 'Bearer anon-key');
+    expect(peticion.headers['apikey'], 'anon-key');
+  });
+
+  test('eliminar ignora enlaces que no son de este bucket', () async {
+    bool seHizoPeticion = false;
+    final MockClient cliente = MockClient((_) async {
+      seHizoPeticion = true;
+      return http.Response('', 200);
+    });
+    final AlmacenamientoImagenes almacenamiento = AlmacenamientoImagenes(
+      cliente: cliente,
+      uidActual: () => 'uid123',
+      url: 'https://proyecto.supabase.co',
+      clave: 'anon-key',
+    );
+
+    await almacenamiento.eliminar(
+      'https://firebasestorage.googleapis.com/v0/b/otro/o/foto.png',
+    );
+    await almacenamiento.eliminar(null);
+
+    expect(seHizoPeticion, isFalse);
+  });
 }

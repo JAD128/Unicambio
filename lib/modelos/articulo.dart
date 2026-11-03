@@ -12,10 +12,8 @@ import 'package:flutter/material.dart';
 
 import 'categoria.dart';
 
-/// Nombre del vendedor que se asigna a las publicaciones creadas en este
-/// dispositivo. Es un marcador provisional: en el Avance 9 se reemplazará por
-/// el nombre real del usuario autenticado.
-const String vendedorPropio = 'Tú (estudiante)';
+/// Nombre de respaldo cuando la cuenta no tiene nombre visible.
+const String vendedorPropio = 'Estudiante';
 
 /// Tipos de publicación que ofrece UniCambio.
 ///
@@ -93,8 +91,11 @@ class Articulo {
   /// Indica si el artículo está marcado como favorito (dato de ejemplo).
   final bool esFavorito;
 
-  /// URL de la imagen guardada en Firebase Storage, si el artículo tiene foto.
+  /// URL de la imagen guardada en Supabase Storage, si el artículo tiene foto.
   final String? imagenUrl;
+
+  /// `uid` de Firebase del usuario que publicó el artículo (null si es local).
+  final String? uidAutor;
 
   /// Constructor constante: permite crear artículos de ejemplo sin costo extra.
   const Articulo({
@@ -107,6 +108,7 @@ class Articulo {
     required this.vendedor,
     this.esFavorito = false,
     this.imagenUrl,
+    this.uidAutor,
   });
 
   /// Crea una copia del artículo cambiando solo los campos que se indiquen.
@@ -124,6 +126,7 @@ class Articulo {
     String? vendedor,
     bool? esFavorito,
     String? imagenUrl,
+    String? uidAutor,
     bool borrarImagen = false,
   }) {
     return Articulo(
@@ -136,6 +139,7 @@ class Articulo {
       vendedor: vendedor ?? this.vendedor,
       esFavorito: esFavorito ?? this.esFavorito,
       imagenUrl: borrarImagen ? null : imagenUrl ?? this.imagenUrl,
+      uidAutor: uidAutor ?? this.uidAutor,
     );
   }
 
@@ -155,6 +159,7 @@ class Articulo {
       'vendedor': vendedor,
       'esFavorito': esFavorito ? 1 : 0,
       'imagenUrl': imagenUrl,
+      'uidAutor': uidAutor,
     };
   }
 
@@ -174,6 +179,7 @@ class Articulo {
       vendedor: map['vendedor'] as String,
       esFavorito: (map['esFavorito'] as int) == 1,
       imagenUrl: map['imagenUrl'] as String?,
+      uidAutor: map['uidAutor'] as String?,
     );
   }
 

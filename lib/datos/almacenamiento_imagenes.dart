@@ -94,6 +94,54 @@ class AlmacenamientoImagenes {
     return urlPublica(ruta);
   }
 
+  /// Borra la foto indicada por su URL pública.
+  ///
+  /// Es "mejor esfuerzo": si la URL no es de este bucket o no hay
+  /// configuración, no hace nada. Solo lanza error si Supabase rechaza el
+  /// borrado (por ejemplo, porque falta la política de `delete`).
+  Future<void> eliminar(String? url) async {
+    if (url == null || _url.isEmpty || _clave.isEmpty) return;
+    final String? ruta = _rutaDesdeUrl(url);
+    if (ruta == null) return;
+
+    final Uri destino = Uri.parse(
+      '${_sinBarraFinal(_url)}/storage/v1/object/$bucket/${_codificar(ruta)}',
+    );
+    final http.Response respuesta = await _cliente
+        .delete(
+          destino,
+          headers: <String, String>{
+            'apikey': _clave,
+            'Authorization': 'Bearer $_clave',
+          },
+        )
+        .timeout(const Duration(seconds: 30));
+
+    if (respuesta.statusCode != 200 && respuesta.statusCode != 204) {
+      throw StateError(
+        'No se pudo borrar la foto (${respuesta.statusCode}): ${respuesta.body}',
+      );
+    }
+  }
+
+  /// Extrae la ruta interna de una URL pública de este bucket.
+  ///
+  /// Devuelve `null` si la URL es de otro dominio o de otro bucket (así no se
+  /// intenta borrar fotos ajenas o enlaces antiguos).
+  String? _rutaDesdeUrl(String url) {
+    final Uri? uri = Uri.tryParse(url);
+    if (uri == null) return null;
+    if (uri.host != Uri.tryParse(_url)?.host) return null;
+
+    final String marcador = '/storage/v1/object/public/$bucket/';
+    final int indice = uri.path.indexOf(marcador);
+    if (indice < 0) return null;
+
+    final String rutaCodificada = uri.path.substring(indice + marcador.length);
+    if (rutaCodificada.isEmpty) return null;
+    return rutaCodificada.split('/').map(Uri.decodeComponent).join('/');
+  }
+
   /// URL pública de un archivo dentro del bucket.
   String urlPublica(String ruta) =>
       '${_sinBarraFinal(_url)}/storage/v1/object/public/$bucket/${_codificar(ruta)}';

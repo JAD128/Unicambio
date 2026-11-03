@@ -176,6 +176,7 @@ class ArticuloRepositorioNube implements ArticuloRepositorio {
       tipo: TipoPublicacion.values.byName(datos['tipo'] as String),
       vendedor: datos['vendedor'] as String,
       imagenUrl: datos['imagenUrl'] as String?,
+      uidAutor: datos['uidAutor'] as String?,
     );
   }
 

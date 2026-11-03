@@ -22,6 +22,7 @@ import '../widgets/chip_categoria.dart';
 import '../widgets/estado_placeholder.dart';
 import '../widgets/tarjeta_articulo.dart';
 import 'pantalla_detalle_articulo.dart';
+import 'pantalla_perfil.dart';
 
 /// Pantalla de Inicio (pestaña "Inicio" de la barra inferior).
 class PantallaInicio extends StatelessWidget {
@@ -37,12 +38,34 @@ class PantallaInicio extends StatelessWidget {
       appBar: AppBar(
         title: const Text('UniCambio'),
         actions: <Widget>[
-          IconButton(
-            onPressed: () async {
-              await FirebaseAuth.instance.signOut();
-            },
-            icon: const Icon(Icons.logout),
-            tooltip: 'Cerrar sesión',
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const PantallaPerfil(),
+                ),
+              ),
+              child: CircleAvatar(
+                radius: 18,
+                backgroundImage: FirebaseAuth.instance.currentUser?.photoURL != null
+                    ? NetworkImage(
+                        FirebaseAuth.instance.currentUser!.photoURL!,
+                      )
+                    : null,
+                child: FirebaseAuth.instance.currentUser?.photoURL == null
+                    ? Text(
+                        proveedor.vendedorActual.isEmpty
+                            ? '?'
+                            : proveedor.vendedorActual
+                                .substring(0, 1)
+                                .toUpperCase(),
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      )
+                    : null,
+              ),
+            ),
           ),
         ],
       ),
@@ -56,7 +79,7 @@ class PantallaInicio extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
-                  'Hola, ${FirebaseAuth.instance.currentUser?.displayName ?? 'estudiante'}',
+                  'Hola, ${proveedor.vendedorActual}',
                   style: tema.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),

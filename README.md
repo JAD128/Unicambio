@@ -29,7 +29,10 @@ Auth.
   (comprimida); se sube a **Supabase Storage** y la URL pública se guarda en el
   artículo. Firestore sigue siendo la base de datos. Configuración en
   `SUPABASE_SETUP.md`.
-- **Pruebas:** 27 pruebas (repositorio con ffi, provider, almacenamiento y widgets).
+- **Perfil:** cada cuenta publica con su nombre real; "Mis artículos" se
+  filtra por `uidAutor`. Desde el avatar de Inicio se puede editar el nombre,
+  cambiar o quitar la foto de perfil y cerrar sesión.
+- **Pruebas:** 30 pruebas (repositorio con ffi, provider, almacenamiento y widgets).
 
 ## Cómo funciona la autenticación
 
@@ -173,7 +176,7 @@ flutter test
 ```
 
 Al actualizar este README, las verificaciones reportaron **No issues
-found!** y **All tests passed!** (27 pruebas).
+found!** y **All tests passed!** (30 pruebas).
 
 ## Estructura relevante
 
@@ -202,7 +205,7 @@ test/
 - `google_sign_in` para obtener el token de Google en Android (en web se usa
   `signInWithPopup` de `firebase_auth`).
 - Cloud Firestore (`cloud_firestore`) para los artículos y favoritos en la nube.
-- Supabase Storage (API REST con `http`) para las fotos de los artículos.
+- Supabase Storage (API REST con `http`) para las fotos de artículos y perfil.
 - `image_picker` para elegir la foto de la galería o tomarla con la cámara.
 - SQLite (`sqflite`) se conserva como implementación histórica y para sus
   pruebas; la app usa Firestore.
@@ -210,6 +213,4 @@ test/
 
 ## Alcance pendiente
 
-- Asociar publicaciones a la cuenta autenticada y filtrar “Mis artículos” por
-  usuario (Avance 9).
 - Verificación de correo y análisis de fotos con ML Kit (Avance 10).

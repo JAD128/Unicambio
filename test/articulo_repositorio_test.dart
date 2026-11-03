@@ -27,6 +27,7 @@ Articulo crearArticulo({
   double precio = 1000,
   bool esFavorito = false,
   String? imagenUrl,
+  String? uidAutor,
 }) {
   return Articulo(
     id: id,
@@ -38,6 +39,7 @@ Articulo crearArticulo({
     vendedor: 'Estudiante de prueba',
     esFavorito: esFavorito,
     imagenUrl: imagenUrl,
+    uidAutor: uidAutor,
   );
 }
 
@@ -195,6 +197,7 @@ void main() {
       precio: 0,
       esFavorito: true,
       imagenUrl: 'https://ejemplo.com/foto.jpg',
+      uidAutor: 'uid-autor',
     );
 
     final Articulo copia = Articulo.fromMap(original.toMap());
@@ -208,5 +211,6 @@ void main() {
     expect(copia.vendedor, original.vendedor);
     expect(copia.esFavorito, original.esFavorito);
     expect(copia.imagenUrl, original.imagenUrl);
+    expect(copia.uidAutor, original.uidAutor);
   });
 }

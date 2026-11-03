@@ -39,10 +39,23 @@ create policy "fotos_select_publico"
 on storage.objects for select
 to anon, authenticated
 using (bucket_id = 'articulos');
+
+-- Borrar fotos viejas al reemplazarlas o eliminar el artículo.
+create policy "fotos_delete_anon"
+on storage.objects for delete
+to anon, authenticated
+using (bucket_id = 'articulos');
 ```
 
-No se crean políticas de `update` ni `delete`: nadie puede reemplazar ni borrar
-fotos existentes desde la app.
+No se crea política de `update`: la app nunca sobrescribe un archivo, sube uno
+nuevo y borra el anterior.
+
+> **Aviso de seguridad:** al no haber login en Supabase, la política de
+> `delete` permite que cualquiera con la clave `anon` (incluida en la app)
+> borre fotos del bucket. Para un proyecto de clase es aceptable; en
+> producción habría que autenticar en Supabase (por ejemplo, con
+> *Third-Party Auth* de Firebase) y limitar el borrado a la carpeta del dueño
+> con `(storage.foldername(name))[1] = auth.uid()::text`.
 
 ## 4. Copiar las credenciales
 

@@ -40,6 +40,7 @@ Articulo crearArticulo({
   required String titulo,
   Categoria categoria = Categoria.libros,
   bool esFavorito = false,
+  String? uidAutor,
 }) {
   return Articulo(
     id: id,
@@ -50,6 +51,7 @@ Articulo crearArticulo({
     tipo: TipoPublicacion.venta,
     vendedor: 'Tester',
     esFavorito: esFavorito,
+    uidAutor: uidAutor,
   );
 }
 
@@ -119,6 +121,25 @@ void main() {
     await provider.seleccionarCategoria(null);
 
     expect(provider.articulos, hasLength(3));
+  });
+
+  test('mios filtra por el uid de la sesión', () async {
+    final ArticulosProvider proveedor = ArticulosProvider(
+      ArticuloRepositorioMemoria(
+        iniciales: <Articulo>[
+          crearArticulo(id: 'a', titulo: 'Mío', uidAutor: 'uid-1'),
+          crearArticulo(id: 'b', titulo: 'Ajeno', uidAutor: 'uid-2'),
+          crearArticulo(id: 'c', titulo: 'Sin dueño'),
+        ],
+      ),
+    );
+    await proveedor.iniciar();
+
+    expect(proveedor.mios, isEmpty);
+
+    proveedor.configurarUsuario(uid: 'uid-1', nombre: 'Ana');
+    expect(proveedor.vendedorActual, 'Ana');
+    expect(proveedor.mios.map((Articulo a) => a.id), <String>['a']);
   });
 
   test('insertar agrega un artículo nuevo', () async {

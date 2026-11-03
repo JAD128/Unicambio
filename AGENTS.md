@@ -14,7 +14,7 @@ cada avance.
 ```bash
 flutter pub get   # tras tocar pubspec.yaml
 flutter analyze   # -> No issues found!
-flutter test      # -> All tests passed!  (27 pruebas)
+flutter test      # -> All tests passed!  (30 pruebas)
 ```
 
 No hay CI: `analyze` + `test` son la única verificación. Ejecutar ambos tras
@@ -47,11 +47,12 @@ Pantallas --context.watch/read--> ArticulosProvider (ChangeNotifier)
   y se desconectó la UI sin que analyze/test lo delataran; verificar tras
   cambios grandes que `ChangeNotifierProvider` siga en `main.dart` y las
   pantallas usen `context.watch/read<ArticulosProvider>()`.
-- "Mis artículos" filtra por `vendedorPropio` ('Tú (estudiante)'), no por la
-  sesión de Firebase (Avance 9).
+- "Mis artículos" filtra por `uidAutor == provider.uidActual`; al publicar se
+  usa `provider.vendedorActual` (displayName real). `main.dart` llama
+  `configurarUsuario(...)` al restaurar/iniciar sesión.
 - Las fotos viven en **Supabase Storage** (`AlmacenamientoImagenes`, API REST
   con `http`) y la URL en `Articulo.imagenUrl` (Firestore y SQLite, esquema
-  v2). Las credenciales van en `lib/config_supabase.dart` (o `--dart-define`);
+  v3; `uidAutor` también desde v3). Las credenciales van en `lib/config_supabase.dart` (o `--dart-define`);
   el bucket público `articulos` y sus políticas se configuran según
   `SUPABASE_SETUP.md`. Firebase Storage no se usa (Blaze no se pudo activar).
   El build de release necesita el permiso `INTERNET` en
@@ -93,6 +94,5 @@ Pantallas --context.watch/read--> ArticulosProvider (ChangeNotifier)
   proyecto.
 - Pantalla lenta en equipos Transsion/Tecno (GPU Mali): probar
   `flutter run --profile` o `--no-enable-impeller`.
-- Deuda técnica consciente: "Mis artículos" aún filtra por `vendedorPropio` y
-  la búsqueda en Firestore es en memoria (no hay `LIKE`); resolver en
-  Avance 9 (`PROGRESO.md` §11).
+- Deuda técnica consciente: la búsqueda en Firestore es en memoria (no hay
+  `LIKE`); resolver en un avance futuro (`PROGRESO.md` §11).

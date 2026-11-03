@@ -79,6 +79,7 @@ class _PantallaPublicarState extends State<PantallaPublicar> {
     try {
       final String id = widget.articulo?.id ??
           'art_${DateTime.now().microsecondsSinceEpoch}';
+      final String? fotoAnterior = widget.articulo?.imagenUrl;
       String? imagenUrl = _quitarImagen ? null : _imagenUrl;
       if (_imagenSeleccionada != null && _bytesImagen != null) {
         imagenUrl = await AlmacenamientoImagenes().subir(
@@ -99,9 +100,10 @@ class _PantallaPublicarState extends State<PantallaPublicar> {
         precio: precio,
         categoria: _categoria,
         tipo: _tipo,
-        vendedor: widget.articulo?.vendedor ?? vendedorPropio,
+        vendedor: widget.articulo?.vendedor ?? proveedor.vendedorActual,
         esFavorito: widget.articulo?.esFavorito ?? false,
         imagenUrl: imagenUrl,
+        uidAutor: widget.articulo?.uidAutor ?? proveedor.uidActual,
       );
 
       if (_esEdicion) {
@@ -116,6 +118,16 @@ class _PantallaPublicarState extends State<PantallaPublicar> {
         );
         return;
       }
+
+      // La foto vieja ya no se usa: se borra del bucket (mejor esfuerzo).
+      if (fotoAnterior != null && fotoAnterior != imagenUrl) {
+        try {
+          await AlmacenamientoImagenes().eliminar(fotoAnterior);
+        } catch (_) {
+          // Si falla el borrado, el artículo ya quedó guardado igual.
+        }
+      }
+      if (!mounted) return;
       Navigator.of(context).pop();
     } catch (error) {
       if (!mounted) return;

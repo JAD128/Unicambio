@@ -126,7 +126,13 @@ class _PuertaAutenticacionState extends State<_PuertaAutenticacion> {
           if (usuario.uid != _uidCargado) {
             _uidCargado = usuario.uid;
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) context.read<ArticulosProvider>().iniciar();
+              if (!mounted) return;
+              context.read<ArticulosProvider>().configurarUsuario(
+                    uid: usuario.uid,
+                    nombre: usuario.displayName,
+                    correo: usuario.email,
+                  );
+              context.read<ArticulosProvider>().iniciar();
             });
           }
           return const PantallaPrincipal();

@@ -63,6 +63,12 @@ class ArticulosProvider extends ChangeNotifier {
   /// `true` tras [dispose]; evita avisar a una UI ya destruida.
   bool _destruido = false;
 
+  /// `uid` de Firebase de la sesión actual (null si no hay sesión).
+  String? _uidActual;
+
+  /// Nombre visible de la sesión actual (para publicar y saludar).
+  String _vendedorActual = vendedorPropio;
+
   // ---------------------------------------------------------------------------
   // Getters públicos: lo único que las pantallas pueden leer.
   // ---------------------------------------------------------------------------
@@ -89,6 +95,21 @@ class ArticulosProvider extends ChangeNotifier {
   /// Categoría seleccionada en los filtros.
   Categoria? get categoriaSeleccionada => _categoriaSeleccionada;
 
+  /// `uid` del usuario actual (null si no hay sesión).
+  String? get uidActual => _uidActual;
+
+  /// Nombre visible del usuario actual (para el saludo y las publicaciones).
+  String get vendedorActual => _vendedorActual;
+
+  /// Artículos publicados por la cuenta actual (vacío si no hay sesión).
+  List<Articulo> get mios {
+    final String? uid = _uidActual;
+    if (uid == null) return UnmodifiableListView<Articulo>(<Articulo>[]);
+    return UnmodifiableListView<Articulo>(
+      _todos.where((Articulo a) => a.uidAutor == uid).toList(),
+    );
+  }
+
   /// `true` si la lista visible está vacía (útil para el estado vacío).
   bool get listaVacia => _articulos.isEmpty;
 
@@ -109,6 +130,24 @@ class ArticulosProvider extends ChangeNotifier {
   Future<void> iniciar() async {
     await _ejecutar(_refrescar);
     _escucharCambios();
+  }
+
+  /// Guarda los datos de la sesión actual (uid y nombre visible).
+  ///
+  /// `main.dart` lo llama al restaurar/iniciar sesión y la pantalla de perfil
+  /// al editar el nombre, para que el saludo y las publicaciones se actualicen.
+  void configurarUsuario({
+    required String uid,
+    String? nombre,
+    String? correo,
+  }) {
+    _uidActual = uid;
+    final String limpio = (nombre ?? '').trim();
+    _vendedorActual = limpio.isNotEmpty
+        ? limpio
+        : (correo ?? '').split('@').first.trim();
+    if (_vendedorActual.isEmpty) _vendedorActual = vendedorPropio;
+    notifyListeners();
   }
 
   // ---------------------------------------------------------------------------
