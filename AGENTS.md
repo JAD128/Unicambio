@@ -14,7 +14,7 @@ cada avance.
 ```bash
 flutter pub get   # tras tocar pubspec.yaml
 flutter analyze   # -> No issues found!
-flutter test      # -> All tests passed!  (24 pruebas)
+flutter test      # -> All tests passed!  (27 pruebas)
 ```
 
 No hay CI: `analyze` + `test` son la única verificación. Ejecutar ambos tras
@@ -49,6 +49,13 @@ Pantallas --context.watch/read--> ArticulosProvider (ChangeNotifier)
   pantallas usen `context.watch/read<ArticulosProvider>()`.
 - "Mis artículos" filtra por `vendedorPropio` ('Tú (estudiante)'), no por la
   sesión de Firebase (Avance 9).
+- Las fotos viven en **Supabase Storage** (`AlmacenamientoImagenes`, API REST
+  con `http`) y la URL en `Articulo.imagenUrl` (Firestore y SQLite, esquema
+  v2). Las credenciales van en `lib/config_supabase.dart` (o `--dart-define`);
+  el bucket público `articulos` y sus políticas se configuran según
+  `SUPABASE_SETUP.md`. Firebase Storage no se usa (Blaze no se pudo activar).
+  El build de release necesita el permiso `INTERNET` en
+  `android/app/src/main/AndroidManifest.xml`.
 - API y getters exactos: ver `PROGRESO.md` §7 antes de tocar provider o
   repositorio.
 

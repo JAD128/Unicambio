@@ -36,7 +36,7 @@ o se cambia la huella:
    inicio de sesión con Google). En PowerShell ejecuta:
 
    ```powershell
-   keytool -list -v -keystore "$env:USERPROFILE\android\debug.keystore" -alias androiddebugkey -storepass android -keypass android | Select-String "SHA1"
+   keytool -list -v -keystore "$env:USERPROFILE\.android\debug.keystore" -alias androiddebugkey -storepass android -keypass android | Select-String "SHA1"
    ```
 
    Copia el valor (formato `AA:BB:CC:...`) y en **Project settings → Your
@@ -83,3 +83,18 @@ Los artículos y favoritos se guardan en **Cloud Firestore** mediante
    `firestore.rules` y pulsa **Publish**.
 3. No hace falta crear colecciones a mano: `insertar` las crea al primer
    uso.
+
+## Fotos de artículos (Avance 8)
+
+Las fotos **no** se guardan en Firebase Storage: Cloud Storage for Firebase
+exige el plan Blaze (tarjeta) y en este proyecto la activación falló con
+`OR_BACR2_59`. Se usa **Supabase Storage** (gratis, sin tarjeta) y en Firestore
+solo se guarda la URL pública en `Articulo.imagenUrl`.
+
+La configuración completa está en **`SUPABASE_SETUP.md`**. Resumen: crear el
+bucket público `articulos`, aplicar las políticas SQL para subir/leer y pegar
+la URL y la clave `anon` en `lib/config_supabase.dart`.
+
+`firestore.rules` no cambia. Si en el futuro se habilita Blaze, solo hay que
+reescribir `AlmacenamientoImagenes` para usar Firebase Storage; la UI y
+Firestore no se tocan.

@@ -175,19 +175,22 @@ class ArticuloRepositorioNube implements ArticuloRepositorio {
       categoria: Categoria.values.byName(datos['categoria'] as String),
       tipo: TipoPublicacion.values.byName(datos['tipo'] as String),
       vendedor: datos['vendedor'] as String,
+      imagenUrl: datos['imagenUrl'] as String?,
     );
   }
 
   /// Convierte el modelo en el mapa que se guarda en Firestore.
   ///
   /// No guardamos `esFavorito` (es por usuario) ni el id (lo asigna Firestore).
-  Map<String, Object> _aMapa(Articulo articulo) => <String, Object>{
+  /// `imagenUrl` se guarda como null al quitar la foto, para borrar el campo.
+  Map<String, Object?> _aMapa(Articulo articulo) => <String, Object?>{
         'titulo': articulo.titulo,
         'descripcion': articulo.descripcion,
         'precio': articulo.precio,
         'categoria': articulo.categoria.name,
         'tipo': articulo.tipo.name,
         'vendedor': articulo.vendedor,
+        'imagenUrl': articulo.imagenUrl,
         'uidAutor': _auth.currentUser?.uid ?? '',
       };
 

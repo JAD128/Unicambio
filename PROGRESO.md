@@ -3,7 +3,7 @@
 > Documento de contexto y bitácora. Léelo completo al retomar el trabajo para
 > no perder el hilo. Actualízalo al cerrar cada avance.
 
-Última actualización: cierre del **avance de reconexión UI → provider → SQLite** (tras detectar que la implementación del Avance 6 desconectó la UI de la capa de datos).
+Última actualización: cierre del **Avance 8 — fotos reales de los artículos**.
 
 ---
 
@@ -30,6 +30,7 @@
 | 5 — Pruebas | Repositorio (ffi) + provider + widgets | ✅ Hecho |
 | 6 — Autenticación | Firebase Auth (correo/contraseña + Google, sesión, reset) | ✅ Hecho |
 | 7 — Backend/nube | Firestore (`ArticuloRepositorioNube` + favoritos por usuario) | ✅ Hecho |
+| 8 — Fotos reales | Selector, Supabase Storage, URL y migración SQLite | ✅ Hecho (falta crear bucket y políticas) |
 
 > **Incidente del Avance 6**: al implementar la autenticación se reescribieron
 > `main.dart` y las pantallas usando datos de ejemplo estáticos
@@ -42,7 +43,7 @@ Verificación más reciente:
 
 ```bash
 flutter analyze   # -> No issues found!
-flutter test      # -> All tests passed!  (24 pruebas)
+flutter test      # -> All tests passed!  (27 pruebas)
 ```
 
 ---
@@ -107,8 +108,9 @@ Reglas de oro:
 ```
 Proyecto_Unicambio/
 ├── lib/
-│   ├── main.dart                          # Arranque: Firebase + repo (ffi/sqflite o memoria) + semilla + provider
+│   ├── main.dart                          # Arranque: Firebase + repo (nube o memoria) + provider
 │   ├── firebase_options.dart              # Opciones Firebase por plataforma (GENERADO; no editar a mano)
+│   ├── config_supabase.dart               # URL + clave anon de Supabase (solo fotos)
 │   ├── modelos/
 │   │   ├── articulo.dart                  # Articulo + enum TipoPublicacion + vendedorPropio
 │   │   └── categoria.dart                 # enum Categoria + extensión UI (etiqueta, icono)
@@ -117,6 +119,7 @@ Proyecto_Unicambio/
 │   │   ├── articulo_repositorio.dart      # Interfaz ArticuloRepositorio + ArticuloRepositorioSqflite
 │   │   ├── articulo_repositorio_nube.dart # Implementación sobre Cloud Firestore (app real)
 │   │   ├── articulo_repositorio_memoria.dart  # Implementación en RAM (pruebas / sin Firebase)
+│   │   ├── almacenamiento_imagenes.dart   # Sube fotos a Supabase Storage (API REST) y devuelve la URL
 │   │   └── articulos_ejemplo.dart         # Lista articulosEjemplo (8) — solo para memoria en pruebas
 │   ├── estado/
 │   │   └── articulos_provider.dart        # Estado global (ChangeNotifier)
@@ -133,10 +136,11 @@ Proyecto_Unicambio/
 │       ├── pantalla_favoritos.dart        # Favoritos (desde provider)
 │       ├── pantalla_mis_articulos.dart    # Mis artículos: editar/eliminar con confirmación
 │       ├── pantalla_detalle_articulo.dart # Detalle (favorito conectado)
-│       └── pantalla_publicar.dart         # Formulario crear/editar (validado)
+│       └── pantalla_publicar.dart         # Formulario crear/editar con foto (galería/cámara)
 └── test/
     ├── widget_test.dart                   # 2 pruebas de humo (UI con provider en memoria)
     ├── articulos_provider_test.dart       # 11 pruebas del estado global
+    ├── almacenamiento_imagenes_test.dart  # 3 pruebas de subida (MockClient)
     └── articulo_repositorio_test.dart     # 11 pruebas de SQLite (con ffi)
 ```
 
@@ -156,13 +160,16 @@ Proyecto_Unicambio/
 | `tipo` | `TipoPublicacion` | enum |
 | `vendedor` | `String` | Nuevos: `'Tú (estudiante)'` |
 | `esFavorito` | `bool` | |
+| `imagenUrl` | `String?` | URL pública en Supabase Storage; null si no tiene foto |
 
 - `TipoPublicacion`: `venta`, `intercambio`, `regalo` (con etiqueta/icono/color).
 - `Categoria`: `libros`, `apuntes`, `tecnologia`, `ropa`, `hogar`, `deportes`, `otros`.
 - `precioTexto`: regalo → "Gratis"; 0 → "A convenir"; resto → "$ N".
-- Serialización: enums como `.name`; `esFavorito` como 0/1 (SQLite no tiene bool).
+- Serialización: enums como `.name`; `esFavorito` como 0/1 (SQLite no tiene bool);
+  `imagenUrl` es opcional (null si no hay foto).
 
-**Tabla `articulos`** (creada en `base_datos.dart`, versión de esquema `1`):
+**Tabla `articulos`** (creada en `base_datos.dart`, versión de esquema `2`; la
+migración desde la versión 1 agrega `imagenUrl`):
 
 ```sql
 CREATE TABLE articulos (
@@ -173,7 +180,8 @@ CREATE TABLE articulos (
   categoria   TEXT    NOT NULL,
   tipo        TEXT    NOT NULL,
   vendedor    TEXT    NOT NULL,
-  esFavorito  INTEGER NOT NULL DEFAULT 0
+  esFavorito  INTEGER NOT NULL DEFAULT 0,
+  imagenUrl   TEXT
 )
 ```
 
@@ -189,6 +197,12 @@ Archivo de la BD: `unicambio.db` (vía `getDatabasesPath()`).
 `buscar(texto, {categoria})`, `filtrarPorCategoria(categoria)`,
 `enTiempoReal` (getter) y `observarTodos()` (stream en tiempo real; solo la
 nube lo implementa).
+
+**`AlmacenamientoImagenes`** (`lib/datos/almacenamiento_imagenes.dart`):
+`subir({articuloId, bytes, nombreArchivo, tipoContenido})` → sube por REST a
+Supabase (`/{uid}/{articuloId}/{hora}.{ext}` en el bucket `articulos`) y
+devuelve la URL pública. Configuración: `lib/config_supabase.dart`
+(`supabaseUrl`, `supabaseAnonKey`) o `--dart-define`. Ver `SUPABASE_SETUP.md`.
 
 **`ArticulosProvider`** (`lib/estado/articulos_provider.dart`):
 - Getters: `todos` (sin filtrar), `articulos` (filtrados), `favoritos`,
@@ -207,7 +221,7 @@ nube lo implementa).
 
 ```bash
 flutter pub get
-flutter run              # dispositivo/emulador Android (recomendado: SQLite real)
+flutter run              # dispositivo/emulador Android (Firestore + Storage reales)
 flutter run -d chrome    # navegador (rápido para ver la UI; en web sqflite no corre igual)
 flutter analyze          # No issues found!
 flutter test             # All tests passed!
@@ -222,12 +236,15 @@ favorito → publicar artículo → editar/eliminar en "Mis artículos".
 
 ---
 
-## 9. Pruebas (24 en total)
+## 9. Pruebas (27 en total)
 
 - `articulo_repositorio_test.dart` (11): usa `sqflite_common_ffi`
   (`sqfliteFfiInit()` + `databaseFactory = databaseFactoryFfi`) y prueba el
   repositorio REAL. Limpia la BD en `setUp` con `BaseDatos.instancia.eliminar()`.
-- `articulos_provider_test.dart` (10): usa `ArticuloRepositorioMemoria`.
+- `articulos_provider_test.dart` (11): usa `ArticuloRepositorioMemoria` y un
+  fake con `StreamController` para el tiempo real.
+- `almacenamiento_imagenes_test.dart` (3): subida a Supabase con `MockClient`
+  (URL, cabeceras, error HTTP y configuración faltante).
 - `widget_test.dart` (2): smoke tests de UI; envuelven pantallas con el provider
   y el repositorio en memoria.
 
@@ -307,12 +324,16 @@ favorito → publicar artículo → editar/eliminar en "Mis artículos".
   la app ya no lo usa.
 - Estado: ✅ Hecho.
 
-### Avance 8 — Fotos reales de los artículos
-- Botón "Agregar foto" (hoy es solo visual) con `image_picker`.
-- Subir a almacenamiento (Firebase Storage / Supabase Storage) y guardar la URL
-  en el artículo (nuevo campo `imagenUrl` + migración de esquema, subir `version`).
-- Reemplazar la "imagen simulada" (degradado + ícono) por la foto real.
-- Estado: ⛔ No iniciado.
+### Avance 8 — Fotos reales de los artículos ✅ HECHO
+- Selector con `image_picker` (galería o cámara), vista previa y opción de
+  quitar la foto.
+- Subida a **Supabase Storage** por REST (`http`), sin SDK ni login en
+  Supabase; la URL pública se guarda en `imagenUrl` (Firestore y SQLite v2).
+- Reemplaza la "imagen simulada" (degradado + ícono) por la foto real en la
+  tarjeta y el detalle.
+- Pendiente manual: crear el bucket público `articulos` y aplicar las
+  políticas SQL (`SUPABASE_SETUP.md`).
+- Estado: ✅ Implementado.
 
 ### Avance 9 — Perfil de usuario y vendedor real
 - Hoy los artículos nuevos usan vendedor `'Tú (estudiante)'` (placeholder).
@@ -355,6 +376,12 @@ favorito → publicar artículo → editar/eliminar en "Mis artículos".
   y si Firebase no arranca.
 - "Mis artículos" se filtra por el vendedor provisional `vendedorPropio`, no
   por la cuenta de Firebase → resolver en Avance 9.
+- Al reemplazar o quitar una foto no se borra el archivo anterior de Storage
+  (queda huérfano); limpiar en un avance futuro.
+- Las cargas reales requieren crear el bucket `articulos` y sus políticas en
+  Supabase (`SUPABASE_SETUP.md`). El bucket es público y permite `insert` con
+  la clave `anon` (sin login en Supabase); aceptable para el proyecto, pero en
+  producción habría que autenticar también allí.
 
 Al empezar el próximo avance: revisar esta sección, acordar el alcance y volver
 a entregar por fases con `analyze` + `test` en verde.
@@ -401,7 +428,7 @@ elige el repo nube cuando Firebase inició y la puerta de sesión recarga el
 provider al aparecer un usuario. `firestore.rules` restringe la escritura al
 dueño y los favoritos al propio uid. Dependencia nueva: `cloud_firestore`
 6.10.0. Verificación: `flutter analyze` → `No issues found!` y `flutter test`
-→ `All tests passed!` (24).
+→ `All tests passed!` (27).
 
 ## Actualización — Tiempo real con Firestore
 
@@ -416,4 +443,24 @@ En facturación, cada documento entregado cuenta como 1 lectura; con este
 tamaño de datos queda holgadamente dentro del plan gratuito. Nueva prueba:
 `los cambios en tiempo real actualizan las listas` (fake con
 `StreamController`). Verificación: `No issues found!` + `All tests passed!`
-(24).
+(27).
+
+## Actualización — Avance 8: fotos reales de los artículos
+
+El formulario permite elegir una imagen de la galería o tomarla con la cámara,
+ver una vista previa, reemplazarla o quitarla. Al guardar, la imagen se carga a
+Supabase Storage (API REST) en una ruta asociada al usuario de Firebase y al
+artículo; la URL pública se persiste en `Articulo.imagenUrl` y SQLite. Las
+tarjetas y el detalle muestran la imagen descargada. El esquema SQLite subió a
+versión 2 con una migración que agrega la columna opcional `imagenUrl` a bases
+existentes. No se usa Firebase Storage porque su plan Blaze no se pudo activar
+(`OR_BACR2_59`); Supabase es gratis y sin tarjeta. Configuración en
+`SUPABASE_SETUP.md` y `lib/config_supabase.dart`.
+
+La imagen también se guarda en Firestore: `ArticuloRepositorioNube` escribe y
+lee `imagenUrl` (null al quitarla). `android/app/src/main/AndroidManifest.xml`
+declara el permiso `INTERNET`, necesario en builds de release. Verificación:
+`flutter analyze` → `No issues found!` y `flutter test` → `All tests passed!`
+(27). Para cargas reales todavía hay que crear el bucket `articulos` y sus
+políticas en Supabase; pasos en `SUPABASE_SETUP.md`. Si algún día se habilita
+Blaze, `AlmacenamientoImagenes` es el único archivo a cambiar.

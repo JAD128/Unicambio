@@ -23,8 +23,13 @@ Auth.
 - **Artículos:** publicaciones y favoritos se guardan en Cloud Firestore
   (`ArticuloRepositorioNube`) a través de `ArticulosProvider`. La app arranca
   **vacía** (sin datos de ejemplo) y los favoritos son **por usuario**.
-  Firestore sirve su caché local cuando no hay conexión.
-- **Pruebas:** 24 pruebas (repositorio con ffi, provider y widgets).
+  Firestore sirve su caché local cuando no hay conexión y las publicaciones de
+  otros usuarios aparecen **en vivo** (`snapshots`).
+- **Fotos:** cada publicación puede llevar una foto de galería o cámara
+  (comprimida); se sube a **Supabase Storage** y la URL pública se guarda en el
+  artículo. Firestore sigue siendo la base de datos. Configuración en
+  `SUPABASE_SETUP.md`.
+- **Pruebas:** 27 pruebas (repositorio con ffi, provider, almacenamiento y widgets).
 
 ## Cómo funciona la autenticación
 
@@ -88,6 +93,14 @@ Las dependencias `firebase_core` y `firebase_auth` están declaradas en
 `pubspec.yaml`. `firebase_core` inicializa Firebase; `firebase_auth` permite
 crear cuentas, iniciar sesión, restablecer la contraseña y cerrar sesión.
 
+### Almacenamiento de fotos (Supabase)
+
+Las fotos se suben a **Supabase Storage**; los artículos y favoritos siguen en
+Firestore. `lib/config_supabase.dart` guarda `supabaseUrl` y
+`supabaseAnonKey`, y `AlmacenamientoImagenes` usa la API REST con `http` (sin
+SDK de Supabase). Pasos completos —crear el proyecto, el bucket público
+`articulos` y las políticas SQL— en **`SUPABASE_SETUP.md`**.
+
 ### Si se configura otra instalación o plataforma
 
 Desde la raíz del proyecto, con Firebase CLI y FlutterFire CLI instalados e
@@ -145,8 +158,10 @@ Para ejecutar en Android, conecta un dispositivo o inicia un emulador.
 7. Pulsa **Continuar con Google** (ya configurado y probado; los pasos quedan
    en `FIREBASE_SETUP.md`).
 8. Publica un artículo con el botón **Publicar**: aparecerá también en la
-   cuenta de otro usuario (Firestore). Marca favoritos en una cuenta y
-   comprueba que no aparecen en la otra.
+   cuenta de otro usuario (Firestore) y sin reiniciar la app (tiempo real).
+   Adjunta una foto desde la galería o cámara y comprueba que se ve en la
+   tarjeta y en el detalle.
+9. Marca favoritos en una cuenta y comprueba que no aparecen en la otra.
 
 Las cuentas creadas se ven en Firebase Console, en **Authentication → Users**.
 
@@ -158,7 +173,7 @@ flutter test
 ```
 
 Al actualizar este README, las verificaciones reportaron **No issues
-found!** y **All tests passed!** (24 pruebas).
+found!** y **All tests passed!** (27 pruebas).
 
 ## Estructura relevante
 
@@ -187,6 +202,8 @@ test/
 - `google_sign_in` para obtener el token de Google en Android (en web se usa
   `signInWithPopup` de `firebase_auth`).
 - Cloud Firestore (`cloud_firestore`) para los artículos y favoritos en la nube.
+- Supabase Storage (API REST con `http`) para las fotos de los artículos.
+- `image_picker` para elegir la foto de la galería o tomarla con la cámara.
 - SQLite (`sqflite`) se conserva como implementación histórica y para sus
   pruebas; la app usa Firestore.
 - Provider para el estado de artículos.
@@ -195,4 +212,4 @@ test/
 
 - Asociar publicaciones a la cuenta autenticada y filtrar “Mis artículos” por
   usuario (Avance 9).
-- Fotos reales de los artículos (Avance 8) y verificación de correo.
+- Verificación de correo y análisis de fotos con ML Kit (Avance 10).

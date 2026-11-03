@@ -8,9 +8,13 @@
 // [articulo], los campos vienen precargados y al guardar se actualiza.
 // =============================================================================
 
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../datos/almacenamiento_imagenes.dart';
 import '../estado/articulos_provider.dart';
 import '../modelos/articulo.dart';
 import '../modelos/categoria.dart';
@@ -33,6 +37,12 @@ class _PantallaPublicarState extends State<PantallaPublicar> {
   late final TextEditingController _precio;
   late TipoPublicacion _tipo;
   late Categoria _categoria;
+  final ImagePicker _selectorImagen = ImagePicker();
+  XFile? _imagenSeleccionada;
+  Uint8List? _bytesImagen;
+  String? _imagenUrl;
+  bool _quitarImagen = false;
+  bool _guardando = false;
 
   bool get _esEdicion => widget.articulo != null;
 
@@ -49,6 +59,7 @@ class _PantallaPublicarState extends State<PantallaPublicar> {
     );
     _tipo = original?.tipo ?? TipoPublicacion.venta;
     _categoria = original?.categoria ?? Categoria.libros;
+    _imagenUrl = original?.imagenUrl;
   }
 
   @override
@@ -61,42 +72,113 @@ class _PantallaPublicarState extends State<PantallaPublicar> {
 
   /// Valida el formulario y guarda (inserta o actualiza) el artículo.
   Future<void> _guardar() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    // En regalo/intercambio el precio no aplica; en venta se lee el campo.
-    final double precio =
-        _tipo == TipoPublicacion.venta ? (double.tryParse(_precio.text) ?? 0) : 0;
-
-    final Articulo articulo = Articulo(
-      // Mismo formato de id que usa el resto de la app (y la semilla).
-      id: widget.articulo?.id ??
-          'art_${DateTime.now().microsecondsSinceEpoch}',
-      titulo: _titulo.text.trim(),
-      descripcion: _descripcion.text.trim(),
-      precio: precio,
-      categoria: _categoria,
-      tipo: _tipo,
-      vendedor: widget.articulo?.vendedor ?? vendedorPropio,
-      esFavorito: widget.articulo?.esFavorito ?? false,
-    );
-
+    if (_guardando || !_formKey.currentState!.validate()) return;
+    setState(() => _guardando = true);
     final ArticulosProvider proveedor = context.read<ArticulosProvider>();
-    if (_esEdicion) {
-      await proveedor.actualizar(articulo);
-    } else {
-      await proveedor.insertar(articulo);
-    }
 
-    if (!mounted) return;
-    if (proveedor.error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(proveedor.error!)),
+    try {
+      final String id = widget.articulo?.id ??
+          'art_${DateTime.now().microsecondsSinceEpoch}';
+      String? imagenUrl = _quitarImagen ? null : _imagenUrl;
+      if (_imagenSeleccionada != null && _bytesImagen != null) {
+        imagenUrl = await AlmacenamientoImagenes().subir(
+          articuloId: id,
+          bytes: _bytesImagen!,
+          nombreArchivo: _imagenSeleccionada!.name,
+          tipoContenido: _imagenSeleccionada!.mimeType ?? 'image/jpeg',
+        );
+      }
+
+      final double precio = _tipo == TipoPublicacion.venta
+          ? (double.tryParse(_precio.text) ?? 0)
+          : 0;
+      final Articulo articulo = Articulo(
+        id: id,
+        titulo: _titulo.text.trim(),
+        descripcion: _descripcion.text.trim(),
+        precio: precio,
+        categoria: _categoria,
+        tipo: _tipo,
+        vendedor: widget.articulo?.vendedor ?? vendedorPropio,
+        esFavorito: widget.articulo?.esFavorito ?? false,
+        imagenUrl: imagenUrl,
       );
-      return;
+
+      if (_esEdicion) {
+        await proveedor.actualizar(articulo);
+      } else {
+        await proveedor.insertar(articulo);
+      }
+      if (!mounted) return;
+      if (proveedor.error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(proveedor.error!)),
+        );
+        return;
+      }
+      Navigator.of(context).pop();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo guardar la foto o el artículo: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _guardando = false);
     }
-    Navigator.of(context).pop();
   }
 
+  Future<void> _mostrarOpcionesImagen() async {
+    final ImageSource? origen = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (BuildContext context) => SafeArea(
+        child: Wrap(
+          children: <Widget>[
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Elegir de la galería'),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Tomar una foto'),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (origen == null) return;
+
+    try {
+      final XFile? archivo = await _selectorImagen.pickImage(
+        source: origen,
+        imageQuality: 82,
+        maxWidth: 1600,
+      );
+      if (archivo == null) return;
+      final Uint8List bytes = await archivo.readAsBytes();
+      if (!mounted) return;
+      setState(() {
+        _imagenSeleccionada = archivo;
+        _bytesImagen = bytes;
+        _quitarImagen = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo abrir la imagen: $error')),
+      );
+    }
+  }
+
+  void _quitarFoto() {
+    setState(() {
+      _imagenSeleccionada = null;
+      _bytesImagen = null;
+      _imagenUrl = null;
+      _quitarImagen = true;
+    });
+  }
   @override
   Widget build(BuildContext context) {
     final ThemeData tema = Theme.of(context);
@@ -216,31 +298,57 @@ class _PantallaPublicarState extends State<PantallaPublicar> {
               const SizedBox(height: 24),
 
               // ---------------------------- Foto ---------------------------
-              // Solo visual: la cámara/galería llega en el Avance 8.
-              OutlinedButton.icon(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Las fotos llegarán en un próximo avance.'),
+              _VistaPreviaImagen(
+                bytes: _bytesImagen,
+                url: _quitarImagen ? null : _imagenUrl,
+                categoria: _categoria,
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _mostrarOpcionesImagen,
+                      icon: const Icon(Icons.add_a_photo_outlined),
+                      label: Text(
+                        _bytesImagen != null || _imagenUrl != null
+                            ? 'Cambiar foto'
+                            : 'Agregar foto',
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(52),
+                      ),
                     ),
-                  );
-                },
-                icon: const Icon(Icons.add_a_photo_outlined),
-                label: const Text('Agregar foto'),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(52),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
                   ),
-                ),
+                  if (_bytesImagen != null || _imagenUrl != null) ...<Widget>[
+                    const SizedBox(width: 8),
+                    IconButton.outlined(
+                      onPressed: _quitarFoto,
+                      tooltip: 'Quitar foto',
+                      icon: const Icon(Icons.delete_outline),
+                    ),
+                  ],
+                ],
               ),
               const SizedBox(height: 28),
 
               // -------------------------- Guardar --------------------------
               FilledButton.icon(
-                onPressed: _guardar,
-                icon: const Icon(Icons.check),
-                label: Text(_esEdicion ? 'Guardar cambios' : 'Publicar artículo'),
+                onPressed: _guardando ? null : _guardar,
+                icon: _guardando
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.check),
+                label: Text(
+                  _guardando
+                      ? 'Guardando...'
+                      : _esEdicion
+                          ? 'Guardar cambios'
+                          : 'Publicar artículo',
+                ),
               ),
             ],
           ),
@@ -264,4 +372,53 @@ class _TituloSeccion extends StatelessWidget {
       style: tema.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
     );
   }
+}
+
+/// Muestra la foto elegida o un espacio para indicar que no hay imagen.
+class _VistaPreviaImagen extends StatelessWidget {
+  const _VistaPreviaImagen({
+    required this.bytes,
+    required this.url,
+    required this.categoria,
+  });
+
+  final Uint8List? bytes;
+  final String? url;
+  final Categoria categoria;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget contenido;
+    if (bytes != null) {
+      contenido = Image.memory(bytes!, fit: BoxFit.cover);
+    } else if (url != null) {
+      contenido = Image.network(
+        url!,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => _marcador(context),
+      );
+    } else {
+      contenido = _marcador(context);
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: SizedBox(
+        height: 190,
+        width: double.infinity,
+        child: contenido,
+      ),
+    );
+  }
+
+  Widget _marcador(BuildContext context) => ColoredBox(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        child: Center(
+          child: Icon(
+            categoria.icono,
+            size: 54,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+      );
 }
