@@ -1,0 +1,33 @@
+workflows:
+  ios-unsigned:
+    name: iOS IPA sin firma para Sideloadly
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      flutter: 3.47.6
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Instalar dependencias Dart
+        script: flutter pub get
+      - name: Verificar análisis y pruebas
+        script: |
+          flutter analyze
+          flutter test
+      - name: Descargar bundles de ML Kit 9.0.3
+        script: bash scripts/download_mlkit_bundles.sh 9.0.3
+      - name: Configurar Xcode para ML Kit
+        script: |
+          gem install xcodeproj --no-document
+          ruby scripts/configure_ios_mlkit.rb
+      - name: Compilar iOS sin firma
+        script: flutter build ios --release --no-codesign
+      - name: Empaquetar IPA
+        script: |
+          rm -rf Payload unicambio.ipa
+          mkdir -p Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/Runner.app
+          zip -qry unicambio.ipa Payload
+    artifacts:
+      - unicambio.ipa
+      - /tmp/xcodebuild_logs/*.log

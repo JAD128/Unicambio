@@ -98,3 +98,42 @@ la URL y la clave `anon` en `lib/config_supabase.dart`.
 `firestore.rules` no cambia. Si en el futuro se habilita Blaze, solo hay que
 reescribir `AlmacenamientoImagenes` para usar Firebase Storage; la UI y
 Firestore no se tocan.
+
+## iOS (pendiente)
+
+Firebase y Google Sign-In en iOS **todavía no están configurados**. La app iOS
+compila con el scaffold actual, pero `DefaultFirebaseOptions.currentPlatform`
+no tiene caso iOS y fallaría en tiempo de ejecución.
+
+Cuando haya sesión de Firebase CLI disponible:
+
+1. Autoriza la CLI y ejecuta FlutterFire solo para iOS:
+
+   ```powershell
+   firebase login
+   dart pub global run flutterfire_cli:flutterfire configure --platforms ios
+   ```
+
+   Si `firebase login --no-localhost` se usa sin navegador, la CLI muestra una
+   URL y un código; termina con `firebase login <authorizationCode>`. En este
+   equipo ese intento quedó pendiente y la sesión `E223E` no se completó.
+
+2. Selecciona el proyecto `unicambio-2f543` y registra el Bundle ID
+   `com.unicambio.unicambio`. FlutterFire debe generar
+   `ios/Runner/GoogleService-Info.plist`, agregarlo al proyecto Xcode y crear
+   el caso iOS en `lib/firebase_options.dart`.
+
+3. En Firebase Console → **Authentication → Sign-in method**, habilita Google
+   para la app iOS si aún no está activo.
+
+4. Copia estos valores de `GoogleService-Info.plist` a `ios/Runner/Info.plist`:
+   - `CLIENT_ID` → `GIDClientID`.
+   - `SERVER_CLIENT_ID` → `GIDServerClientID` (si el proveedor lo entrega).
+   - `REVERSED_CLIENT_ID` → URL scheme dentro de `CFBundleURLTypes`.
+
+5. Verifica que `NSCameraUsageDescription` y
+   `NSPhotoLibraryUsageDescription` sigan presentes en `Info.plist` (ya están
+   agregadas).
+
+Hasta terminar estos pasos, no marcar iOS como configurado en la documentación
+ni esperar que login/Firestore funcionen en el IPA de Codemagic.

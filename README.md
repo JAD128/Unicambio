@@ -32,7 +32,16 @@ Auth.
 - **Perfil:** cada cuenta publica con su nombre real; "Mis artículos" se
   filtra por `uidAutor`. Desde el avatar de Inicio se puede editar el nombre,
   cambiar o quitar la foto de perfil y cerrar sesión.
-- **Pruebas:** 30 pruebas (repositorio con ffi, provider, almacenamiento y widgets).
+- **Sugerencias con ML Kit (Android):** al elegir una foto, la app etiqueta la
+  imagen y hace OCR **en el dispositivo**. El formulario propone categoría,
+  título, descripción y líneas de texto; cada campo se aplica solo si tocas
+  "Usar"/"Reemplazar". No se sugiere precio ni se rellena nada solo. En web
+  esta función se omite y el formulario sigue funcionando.
+- **Pruebas:** 49 pruebas (repositorio con ffi, provider, almacenamiento,
+  lógica de visión y widgets).
+- **iOS (en preparación):** scaffold generado y workflow de Codemagic para
+  producir un IPA sin firma e instalarlo con Sideloadly. Firebase/Google en iOS
+  siguen pendientes de configuración.
 
 ## Cómo funciona la autenticación
 
@@ -72,7 +81,7 @@ el cambio de sesión hace que `_PuertaAutenticacion` vuelva a mostrar el acceso.
 ## Configuración de Firebase
 
 La app está vinculada al proyecto Firebase **UniCambio** (`unicambio-2f543`),
-con aplicaciones registradas para Android y Web. Para que el acceso funcione,
+con aplicaciones registradas para Android y Web (iOS pendiente). Para que el acceso funcione,
 el proveedor **Correo electrónico/contraseña** debe estar habilitado en Firebase
 Console:
 
@@ -165,8 +174,41 @@ Para ejecutar en Android, conecta un dispositivo o inicia un emulador.
    Adjunta una foto desde la galería o cámara y comprueba que se ve en la
    tarjeta y en el detalle.
 9. Marca favoritos en una cuenta y comprueba que no aparecen en la otra.
+10. En Android, al adjuntar una foto espera el análisis (ML Kit). Prueba
+    "Usar" en categoría/título/descripción, una línea de OCR y "Descartar".
+    Verifica que cambiar la foto reemplaza las sugerencias y que en Chrome no
+    se intenta analizar.
 
 Las cuentas creadas se ven en Firebase Console, en **Authentication → Users**.
+
+## Build iOS con Codemagic (en preparación)
+
+La plataforma iOS ya está generada con Bundle ID `com.unicambio.unicambio` y
+deployment target 15.0. No hace falta Mac: el workflow `ios-unsigned` de
+`codemagic.yaml` instala dependencias, corre `analyze` y `test`, descarga los
+bundles de ML Kit `9.0.3`, configura el proyecto Xcode, compila con
+`flutter build ios --release --no-codesign` y deja el artefacto `unicambio.ipa`.
+
+Para usarlo:
+
+1. Sube el repo a GitHub y crea el workflow `ios-unsigned` en Codemagic.
+2. Antes de esperar login en iOS, completa la configuración pendiente:
+   ejecuta `firebase login` y
+   `dart pub global run flutterfire_cli:flutterfire configure --platforms ios`.
+   FlutterFire debe registrar `com.unicambio.unicambio`, generar
+   `ios/Runner/GoogleService-Info.plist` y agregar el caso iOS a
+   `lib/firebase_options.dart`.
+3. Copia de `GoogleService-Info.plist` a `ios/Runner/Info.plist` los valores
+   `CLIENT_ID` (`GIDClientID`), `SERVER_CLIENT_ID` (`GIDServerClientID`) y
+   `REVERSED_CLIENT_ID` (URL scheme de `CFBundleURLTypes`). Los permisos de
+   cámara y galería ya están agregados. Sin estos pasos, el IPA compila pero la
+   app no inicia Firebase/Google en iOS.
+4. Descarga `unicambio.ipa` e instálalo desde Windows con Sideloadly o AltStore
+   conectando el iPhone por USB. Sin Apple Developer Program no hay TestFlight.
+
+Con un Apple ID gratuito la firma suele durar unos 7 días y hay que reinstalar.
+Además, Sideloadly puede cambiar el Bundle ID al firmar; si ocurre, registra ese
+nuevo id en Firebase o desactiva Google Sign-In en iOS.
 
 ## Verificación del proyecto
 
@@ -176,7 +218,8 @@ flutter test
 ```
 
 Al actualizar este README, las verificaciones reportaron **No issues
-found!** y **All tests passed!** (30 pruebas).
+found!** y **All tests passed!** (49 pruebas). También compilan
+`flutter build apk --debug` y `flutter build web`.
 
 ## Estructura relevante
 
@@ -190,11 +233,14 @@ lib/
 │   ├── pantalla_favoritos.dart
 │   ├── pantalla_mis_articulos.dart
 │   └── pantalla_publicar.dart
-├── datos/                            # Persistencia/repositorio de artículos
+├── datos/                            # Repositorios, Supabase y visión (ML Kit)
 ├── estado/                           # Estado de artículos
 └── tema/                             # Tema visual Material 3
 test/
-└── widget_test.dart                  # Pruebas de widgets
+├── widget_test.dart                  # Pruebas de widgets
+├── sugeridor_publicacion_test.dart   # Etiquetas/OCR → sugerencias
+├── generador_descripcion_test.dart   # Plantillas de descripción
+└── panel_sugerencias_test.dart       # Panel de sugerencias
 ```
 
 ## Tecnologías
@@ -207,10 +253,15 @@ test/
 - Cloud Firestore (`cloud_firestore`) para los artículos y favoritos en la nube.
 - Supabase Storage (API REST con `http`) para las fotos de artículos y perfil.
 - `image_picker` para elegir la foto de la galería o tomarla con la cámara.
+- Google ML Kit (`google_mlkit_image_labeling` y
+  `google_mlkit_text_recognition`) para etiquetado y OCR on-device en Android.
 - SQLite (`sqflite`) se conserva como implementación histórica y para sus
   pruebas; la app usa Firestore.
 - Provider para el estado de artículos.
 
 ## Alcance pendiente
 
-- Verificación de correo y análisis de fotos con ML Kit (Avance 10).
+- Verificación de correo.
+- Prueba manual de las sugerencias de ML Kit en un dispositivo/emulador
+  Android (el build APK ya compila).
+- Chat con el vendedor, notificaciones y búsqueda avanzada.

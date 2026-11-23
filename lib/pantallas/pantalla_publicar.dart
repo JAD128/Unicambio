@@ -2,29 +2,47 @@
 // ARCHIVO: lib/pantallas/pantalla_publicar.dart
 // DESCRIPCIÓN: Formulario para publicar un artículo nuevo o editar uno
 //              existente. Valida los campos y guarda mediante
-//              [ArticulosProvider] (que usa SQLite).
+//              [ArticulosProvider] (Firestore en la app; memoria en pruebas).
 //
 // El mismo formulario sirve para crear y para editar: si se recibe un
 // [articulo], los campos vienen precargados y al guardar se actualiza.
 // =============================================================================
 
+import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../datos/almacenamiento_imagenes.dart';
+import '../datos/generador_descripcion.dart';
+import '../datos/servicio_vision.dart';
+import '../datos/sugeridor_publicacion.dart';
 import '../estado/articulos_provider.dart';
 import '../modelos/articulo.dart';
 import '../modelos/categoria.dart';
+import '../modelos/vision.dart';
+import '../widgets/panel_sugerencias.dart';
 
 /// Pantalla del formulario de publicación.
 class PantallaPublicar extends StatefulWidget {
   /// Artículo a editar. Si es `null`, el formulario crea uno nuevo.
   final Articulo? articulo;
 
-  const PantallaPublicar({super.key, this.articulo});
+  /// Servicio de visión inyectable (en pruebas se usa uno falso).
+  final ServicioVision? servicioVision;
+
+  /// Generador de descripciones (por defecto, plantillas locales).
+  final GeneradorDescripcion generadorDescripcion;
+
+  const PantallaPublicar({
+    super.key,
+    this.articulo,
+    this.servicioVision,
+    this.generadorDescripcion = const PlantillaGeneradorDescripcion(),
+  });
 
   @override
   State<PantallaPublicar> createState() => _PantallaPublicarState();
@@ -44,6 +62,23 @@ class _PantallaPublicarState extends State<PantallaPublicar> {
   bool _quitarImagen = false;
   bool _guardando = false;
 
+  /// Servicio de visión creado perezosamente al elegir la primera foto.
+  ServicioVision? _servicioVision;
+
+  /// Sugerencias de la última foto analizada (null si no hay o se descartaron).
+  SugerenciasPublicacion? _sugerencias;
+
+  /// `true` mientras ML Kit procesa la foto.
+  bool _analizando = false;
+
+  /// Identifica el análisis vigente; si cambia la foto, el resultado viejo
+  /// se ignora al llegar (evita mezclar dos fotos).
+  int _tokenAnalisis = 0;
+
+  /// `true` cuando el usuario ya eligió una categoría (o edita un artículo):
+  /// en ese caso la descripción respeta esa categoría y no la sugerida.
+  bool _categoriaTocada = false;
+
   bool get _esEdicion => widget.articulo != null;
 
   @override
@@ -59,15 +94,33 @@ class _PantallaPublicarState extends State<PantallaPublicar> {
     );
     _tipo = original?.tipo ?? TipoPublicacion.venta;
     _categoria = original?.categoria ?? Categoria.libros;
+    _categoriaTocada = original != null;
     _imagenUrl = original?.imagenUrl;
+
+    // La descripción sugerida se recalcula mientras el usuario escribe.
+    _titulo.addListener(_alCambiarTexto);
+    _descripcion.addListener(_alCambiarTexto);
   }
 
   @override
   void dispose() {
+    _tokenAnalisis++;
+    final ServicioVision? servicio = _servicioVision;
+    if (servicio != null) {
+      unawaited(servicio.cerrar());
+    }
+    _titulo.removeListener(_alCambiarTexto);
+    _descripcion.removeListener(_alCambiarTexto);
     _titulo.dispose();
     _descripcion.dispose();
     _precio.dispose();
     super.dispose();
+  }
+
+  /// Redibuja el panel si el usuario cambia el título o la descripción.
+  void _alCambiarTexto() {
+    if (!mounted || _sugerencias == null) return;
+    setState(() {});
   }
 
   /// Valida el formulario y guarda (inserta o actualiza) el artículo.
@@ -174,7 +227,11 @@ class _PantallaPublicarState extends State<PantallaPublicar> {
         _imagenSeleccionada = archivo;
         _bytesImagen = bytes;
         _quitarImagen = false;
+        _sugerencias = null;
       });
+      if (!kIsWeb) {
+        unawaited(_analizarFoto(archivo));
+      }
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -183,12 +240,95 @@ class _PantallaPublicarState extends State<PantallaPublicar> {
     }
   }
 
+  /// Analiza la foto nueva con ML Kit, sin bloquear el resto del formulario.
+  Future<void> _analizarFoto(XFile archivo) async {
+    final int token = ++_tokenAnalisis;
+    setState(() {
+      _analizando = true;
+      _sugerencias = null;
+    });
+
+    try {
+      final ServicioVision servicio = _servicioVision ??=
+          widget.servicioVision ?? ServicioVisionMlKit();
+      final ResultadoVision resultado = await servicio.analizar(archivo.path);
+      if (!mounted || token != _tokenAnalisis) return;
+
+      final SugerenciasPublicacion sugerencias =
+          const SugeridorPublicacion().sugerir(resultado);
+      setState(() {
+        _sugerencias = sugerencias.vacia ? null : sugerencias;
+        _analizando = false;
+      });
+    } catch (_) {
+      if (!mounted || token != _tokenAnalisis) return;
+      setState(() {
+        _sugerencias = null;
+        _analizando = false;
+      });
+    }
+  }
+
+  /// Texto sugerido para la descripción según el estado actual del formulario.
+  String _descripcionSugerida(SugerenciasPublicacion sugerencias) {
+    final String tituloActual = _titulo.text.trim();
+    final String? titulo =
+        tituloActual.isNotEmpty ? tituloActual : sugerencias.titulo;
+
+    // Si no hay título ni categoría, no hay base para una descripción útil.
+    if (titulo == null && sugerencias.categoria == null && !_categoriaTocada) {
+      return '';
+    }
+
+    final Categoria categoria = _categoriaTocada
+        ? _categoria
+        : (sugerencias.categoria ?? Categoria.otros);
+
+    return widget.generadorDescripcion.generar(
+      titulo: titulo,
+      categoria: categoria,
+      tipo: _tipo,
+    );
+  }
+
+  void _aplicarCategoria(Categoria categoria) {
+    setState(() {
+      _categoria = categoria;
+      _categoriaTocada = true;
+    });
+  }
+
+  void _aplicarTitulo(String titulo) {
+    _titulo.value = TextEditingValue(
+      text: titulo,
+      selection: TextSelection.collapsed(offset: titulo.length),
+    );
+  }
+
+  void _aplicarDescripcion(String descripcion) {
+    _descripcion.value = TextEditingValue(
+      text: descripcion,
+      selection: TextSelection.collapsed(offset: descripcion.length),
+    );
+  }
+
+  void _descartarSugerencias() {
+    _tokenAnalisis++;
+    setState(() {
+      _sugerencias = null;
+      _analizando = false;
+    });
+  }
+
   void _quitarFoto() {
+    _tokenAnalisis++;
     setState(() {
       _imagenSeleccionada = null;
       _bytesImagen = null;
       _imagenUrl = null;
       _quitarImagen = true;
+      _sugerencias = null;
+      _analizando = false;
     });
   }
   @override
@@ -196,6 +336,7 @@ class _PantallaPublicarState extends State<PantallaPublicar> {
     final ThemeData tema = Theme.of(context);
     // Si la publicación es regalo/intercambio, el precio se oculta.
     final bool mostrarPrecio = _tipo == TipoPublicacion.venta;
+    final SugerenciasPublicacion? sugerencias = _sugerencias;
 
     return Scaffold(
       appBar: AppBar(
@@ -291,6 +432,9 @@ class _PantallaPublicarState extends State<PantallaPublicar> {
               _TituloSeccion(texto: 'Categoría', tema: tema),
               const SizedBox(height: 8),
               DropdownButtonFormField<Categoria>(
+                // La key hace que el dropdown se reconstruya al aplicar una
+                // categoría sugerida (initialValue solo se lee al crearse).
+                key: ValueKey<Categoria>(_categoria),
                 initialValue: _categoria,
                 decoration: const InputDecoration(
                   prefixIcon: Icon(Icons.category_outlined),
@@ -304,7 +448,11 @@ class _PantallaPublicarState extends State<PantallaPublicar> {
                     )
                     .toList(),
                 onChanged: (Categoria? valor) {
-                  if (valor != null) setState(() => _categoria = valor);
+                  if (valor == null) return;
+                  setState(() {
+                    _categoria = valor;
+                    _categoriaTocada = true;
+                  });
                 },
               ),
               const SizedBox(height: 24),
@@ -342,6 +490,61 @@ class _PantallaPublicarState extends State<PantallaPublicar> {
                   ],
                 ],
               ),
+              if (_analizando)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Row(
+                    children: <Widget>[
+                      const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Analizando foto...',
+                        style: tema.textTheme.bodyMedium,
+                      ),
+                    ],
+                  ),
+                ),
+              if (kIsWeb && _bytesImagen != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Row(
+                    children: <Widget>[
+                      Icon(
+                        Icons.info_outline,
+                        size: 18,
+                        color: tema.colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'El análisis de fotos con ML Kit solo está '
+                          'disponible en Android.',
+                          style: tema.textTheme.bodySmall?.copyWith(
+                            color: tema.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              if (sugerencias != null) ...<Widget>[
+                const SizedBox(height: 14),
+                PanelSugerencias(
+                  sugerencias: sugerencias,
+                  descripcion: _descripcionSugerida(sugerencias),
+                  tituloActual: _titulo.text,
+                  descripcionActual: _descripcion.text,
+                  categoriaActual: _categoria,
+                  alAplicarCategoria: _aplicarCategoria,
+                  alAplicarTitulo: _aplicarTitulo,
+                  alAplicarDescripcion: _aplicarDescripcion,
+                  alDescartar: _descartarSugerencias,
+                ),
+              ],
               const SizedBox(height: 28),
 
               // -------------------------- Guardar --------------------------

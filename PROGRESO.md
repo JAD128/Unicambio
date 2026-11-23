@@ -3,7 +3,8 @@
 > Documento de contexto y bitácora. Léelo completo al retomar el trabajo para
 > no perder el hilo. Actualízalo al cerrar cada avance.
 
-Última actualización: cierre del **Avance 9 — perfil y vendedor real**.
+Última actualización: cierre del **Avance 10 — visión por computadora con
+Google ML Kit** y preparación en curso del build iOS para Codemagic.
 
 ---
 
@@ -14,7 +15,7 @@
 
 - Directorio: `C:\Users\juand\Desktop\U\10mo\Desarrollo movil\Proyecto_Unicambio`
 - Paquete Dart: `unicambio` · organización `com.unicambio`
-- Plataformas habilitadas: `android`, `web`
+- Plataformas habilitadas: `android`, `web`, `ios` (scaffold generado; Firebase iOS pendiente)
 - Flutter 3.47.6 · Dart SDK `^3.13.0`
 
 ---
@@ -31,6 +32,9 @@
 | 6 — Autenticación | Firebase Auth (correo/contraseña + Google, sesión, reset) | ✅ Hecho |
 | 7 — Backend/nube | Firestore (`ArticuloRepositorioNube` + favoritos por usuario) | ✅ Hecho |
 | 8 — Fotos reales | Selector, Supabase Storage, URL y migración SQLite | ✅ Hecho (falta crear bucket y políticas) |
+| 9 — Perfil y vendedor | `uidAutor`, perfil editable y nombre real | ✅ Hecho |
+| 10 — Visión (ML Kit) | Etiquetado + OCR y sugerencias en el formulario | ✅ Hecho |
+| 11 — Build iOS | Scaffold iOS, scripts ML Kit y Codemagic | 🟡 En curso (Firebase iOS pendiente) |
 
 > **Incidente del Avance 6**: al implementar la autenticación se reescribieron
 > `main.dart` y las pantallas usando datos de ejemplo estáticos
@@ -43,25 +47,27 @@ Verificación más reciente:
 
 ```bash
 flutter analyze   # -> No issues found!
-flutter test      # -> All tests passed!  (30 pruebas)
+flutter test      # -> All tests passed!  (49 pruebas)
 ```
 
 ---
 
 ## 3. Funcionalidades actuales (todas funcionales)
 
-- Ver artículos (desde la base de datos SQLite).
+- Ver artículos (Firestore; memoria como respaldo si Firebase no arranca).
 - **Buscar** por título (búsqueda dinámica al escribir).
 - **Filtrar** por categoría con chips.
-- Ver **detalle** del artículo (imagen simulada, precio, descripción, vendedor).
+- Ver **detalle** del artículo (foto real, precio, descripción, vendedor).
 - **Marcar/desmarcar favoritos** (se refleja en toda la app).
-- **Crear** publicación (con validación del formulario).
+- **Crear** publicación (con validación del formulario y foto opcional).
 - **Editar** publicación.
 - **Eliminar** publicación (con diálogo de confirmación).
 - Navegación inferior: Inicio / Favoritos / Mis artículos.
 - Botón flotante **Publicar**.
-
-Pendiente para el siguiente avance: nube, fotos reales.
+- **Sugerencias de la foto (Avance 10):** al elegir una foto en Android,
+  ML Kit detecta etiquetas y texto, y el formulario ofrece categoría, título,
+  descripción y líneas de OCR. Cada campo se aplica solo si el usuario toca
+  "Usar"/"Reemplazar"; nada se rellena automáticamente.
 
 ## 3.1 Funcionalidades de la autenticación (Avance 6)
 
@@ -113,13 +119,17 @@ Proyecto_Unicambio/
 │   ├── config_supabase.dart               # URL + clave anon de Supabase (solo fotos)
 │   ├── modelos/
 │   │   ├── articulo.dart                  # Articulo + enum TipoPublicacion + vendedorPropio
-│   │   └── categoria.dart                 # enum Categoria + extensión UI (etiqueta, icono)
+│   │   ├── categoria.dart                 # enum Categoria + extensión UI (etiqueta, icono)
+│   │   └── vision.dart                    # Etiquetas, resultado de ML Kit y sugerencias
 │   ├── datos/
 │   │   ├── base_datos.dart                # Singleton BaseDatos: abre unicambio.db y crea la tabla
 │   │   ├── articulo_repositorio.dart      # Interfaz ArticuloRepositorio + ArticuloRepositorioSqflite
 │   │   ├── articulo_repositorio_nube.dart # Implementación sobre Cloud Firestore (app real)
 │   │   ├── articulo_repositorio_memoria.dart  # Implementación en RAM (pruebas / sin Firebase)
 │   │   ├── almacenamiento_imagenes.dart   # Sube fotos a Supabase Storage (API REST) y devuelve la URL
+│   │   ├── servicio_vision.dart           # Interfaz ServicioVision + implementación ML Kit
+│   │   ├── sugeridor_publicacion.dart     # Etiquetas/OCR → categoría y título sugeridos
+│   │   ├── generador_descripcion.dart     # Interfaz + plantillas locales de descripción
 │   │   └── articulos_ejemplo.dart         # Lista articulosEjemplo (8) — solo para memoria en pruebas
 │   ├── estado/
 │   │   └── articulos_provider.dart        # Estado global (ChangeNotifier)
@@ -129,6 +139,7 @@ Proyecto_Unicambio/
 │   │   ├── campo_busqueda.dart            # Barra de búsqueda (callback alCambiar)
 │   │   ├── chip_categoria.dart            # Chip seleccionable (callback alSeleccionar)
 │   │   ├── estado_placeholder.dart        # Mensaje centrado (vacío / error)
+│   │   ├── panel_sugerencias.dart         # Sugerencias de la foto con "Usar" por campo
 │   │   └── tarjeta_articulo.dart          # Tarjeta (imagen, insignia, favorito, precio)
 │   └── pantallas/
 │       ├── pantalla_autenticacion.dart    # Inicio, registro, reset y Google (Firebase)
@@ -142,7 +153,10 @@ Proyecto_Unicambio/
     ├── widget_test.dart                   # 2 pruebas de humo (UI con provider en memoria)
     ├── articulos_provider_test.dart       # 12 pruebas del estado global
     ├── almacenamiento_imagenes_test.dart  # 5 pruebas de subida/borrado (MockClient)
-    └── articulo_repositorio_test.dart     # 11 pruebas de SQLite (con ffi)
+    ├── articulo_repositorio_test.dart     # 11 pruebas de SQLite (con ffi)
+    ├── sugeridor_publicacion_test.dart    # 9 pruebas de etiquetas/OCR
+    ├── generador_descripcion_test.dart    # 5 pruebas de plantillas
+    └── panel_sugerencias_test.dart        # 5 pruebas de widgets del panel
 ```
 
 ---
@@ -207,6 +221,20 @@ Supabase (`/{uid}/{articuloId}/{hora}.{ext}` en el bucket `articulos`) y
 devuelve la URL pública. Configuración: `lib/config_supabase.dart`
 (`supabaseUrl`, `supabaseAnonKey`) o `--dart-define`. Ver `SUPABASE_SETUP.md`.
 
+**Visión (Avance 10)**:
+- `ServicioVision` (`lib/datos/servicio_vision.dart`): `analizar(ruta)` →
+  `ResultadoVision(etiquetas, lineasTexto)` y `cerrar()`. La implementación
+  `ServicioVisionMlKit` usa `ImageLabeler` + `TextRecognizer` (latín) on-device.
+- `SugeridorPublicacion` (`lib/datos/sugeridor_publicacion.dart`):
+  `sugerir(ResultadoVision)` → `SugerenciasPublicacion(categoria, titulo,
+  lineasTexto)`. Lógica pura, sin Flutter ni ML Kit.
+- `GeneradorDescripcion` (`lib/datos/generador_descripcion.dart`):
+  `generar({titulo, categoria, tipo})`. Hoy `PlantillaGeneradorDescripcion`
+  compone el texto localmente; se puede sustituir por un LLM sin tocar la UI.
+- `PanelSugerencias` (`lib/widgets/panel_sugerencias.dart`): recibe las
+  sugerencias y avisa con `alAplicarCategoria`, `alAplicarTitulo`,
+  `alAplicarDescripcion` y `alDescartar`.
+
 **`ArticulosProvider`** (`lib/estado/articulos_provider.dart`):
 - Getters: `todos` (sin filtrar), `articulos` (filtrados), `favoritos`,
   `cargando`, `error`, `textoBusqueda`, `categoriaSeleccionada`, `listaVacia`,
@@ -233,15 +261,19 @@ flutter test             # All tests passed!
 
 Dependencias (`pubspec.yaml`): `cupertino_icons`, `firebase_core`,
 `firebase_auth`, `cloud_firestore`, `google_sign_in`, `provider`,
-`http`, `image_picker`, `sqflite`, `path`; dev: `flutter_lints`,
-`sqflite_common_ffi`.
+`http`, `image_picker`, `sqflite`, `path`, `google_mlkit_image_labeling`,
+`google_mlkit_text_recognition`; dev: `flutter_lints`, `sqflite_common_ffi`.
 
 **Prueba manual sugerida:** buscar → filtrar por chip → abrir detalle → marcar
-favorito → publicar artículo → editar/eliminar en "Mis artículos".
+favorito → publicar artículo con foto (en Android, aplicar sugerencias de
+categoría/título/descripción) → editar/eliminar en "Mis artículos". En este
+equipo no hay emulador ni dispositivo Android conectado: se verificó el build
+`flutter build apk --debug` y `flutter build web`, pero la prueba táctil de
+ML Kit queda pendiente en un teléfono/emulador.
 
 ---
 
-## 9. Pruebas (30 en total)
+## 9. Pruebas (49 en total)
 
 - `articulo_repositorio_test.dart` (11): usa `sqflite_common_ffi`
   (`sqfliteFfiInit()` + `databaseFactory = databaseFactoryFfi`) y prueba el
@@ -251,6 +283,12 @@ favorito → publicar artículo → editar/eliminar en "Mis artículos".
 - `almacenamiento_imagenes_test.dart` (5): subida/borrado en Supabase con
   `MockClient` (URL, cabeceras, error HTTP, configuración faltante y enlaces
   ajenos).
+- `sugeridor_publicacion_test.dart` (9): mapeo etiquetas→categoría, umbrales,
+  títulos desde OCR, rechazo de precios/tallas, normalización y resultado vacío.
+- `generador_descripcion_test.dart` (5): plantillas por tipo/categoría, texto
+  sin precio y variante estable.
+- `panel_sugerencias_test.dart` (5): "Usar"/"Reemplazar"/"Descartar", líneas
+  de OCR tocables y panel oculto sin sugerencias.
 - `widget_test.dart` (2): smoke tests de UI; envuelven pantallas con el provider
   y el repositorio en memoria.
 
@@ -275,6 +313,17 @@ favorito → publicar artículo → editar/eliminar en "Mis artículos".
   nombre); las publicaciones usan el `displayName` real como `vendedor`.
 - **Agregar dependencias** es válido si hace falta (ya se hizo con sqflite,
   provider, ffi), pero avisar/justificar.
+- **Visión on-device (Avance 10).** ML Kit etiqueta y hace OCR, pero **no
+  redacta** lenguaje natural. La descripción sale de
+  `PlantillaGeneradorDescripcion`; `GeneradorDescripcion` queda como punto de
+  extensión para un LLM futuro. No se usa Gemini Nano/AICore porque exige
+  dispositivos compatibles, `minSdk 26` y APIs aún beta/alpha.
+- **Nada se auto-aplica.** El panel muestra "Usar"/"Reemplazar" por campo y
+  "Descartar"; si cambia la foto se ignoran resultados viejos con un token.
+- **ML Kit solo corre en Android/iOS**, no en web. La pantalla usa `kIsWeb`
+  para no invocar el plugin en Chrome; el build web sigue compilando.
+- **No se sugiere precio** desde OCR: un número en la foto no garantiza que
+  sea el precio. Las plantillas tampoco afirman estado, calidad ni ubicación.
 
 ### Problemas conocidos (no son del proyecto)
 - `BLASTBufferQueue ... releaseBufferCallback without corresponding submitted
@@ -348,16 +397,53 @@ favorito → publicar artículo → editar/eliminar en "Mis artículos".
   quitar foto (Supabase) y cerrar sesión; muestra publicaciones y favoritos.
 - Estado: ✅ Hecho.
 
-### Avance 10 — Visión por computadora con Google ML Kit
-- Integrar **Google ML Kit** (paquete `google_mlkit_*` de Flutter) para análisis
-  de imágenes **on-device**, enfocado en las APIs de **ML Kit Vision**.
-- Casos candidatos: reconocimiento de texto (**OCR**, `text_recognition`) para
-  leer etiquetas o precios, etiquetado de imágenes (`image_labeling`) para
-  autocompletar la categoría, y detección de objetos (`object_detection`).
-- Encaja tras el Avance 8 (fotos reales): la foto capturada se procesa con ML
-  Kit para sugerir categoría/título o extraer texto.
-- Considerar rendimiento en equipos de gama baja y permisos de cámara.
-- Estado: ⛔ No iniciado.
+### Avance 10 — Visión por computadora con Google ML Kit ✅ HECHO
+- **Etiquetado** (`google_mlkit_image_labeling`) y **OCR**
+  (`google_mlkit_text_recognition`, script latino) on-device al elegir una foto
+  nueva en Android. No se analizan URLs de fotos ya guardadas.
+- `SugeridorPublicacion` traduce etiquetas inglesas a las 7 categorías, exige
+  confianza mínima y margen sobre la segunda, y propone un título desde el OCR
+  (rechaza precios, URLs, tallas y metadatos) o desde la mejor etiqueta.
+- `PanelSugerencias` muestra categoría, título, descripción y texto OCR. El
+  usuario aplica cada campo con "Usar"/"Reemplazar" o descarta todo; no hay
+  auto-relleno. Las líneas de OCR también se pueden usar como título.
+- La descripción se genera con `GeneradorDescripcion` (plantillas locales por
+  tipo y categoría) y se recalcula si cambia el tipo, la categoría o el título.
+  No se sugiere precio.
+- Web: se evita el plugin con `kIsWeb`; en Chrome se muestra un aviso y el
+  formulario sigue funcionando. El servicio se crea de forma perezosa y se
+  cierra en `dispose`; un token descarta resultados de una foto anterior.
+- Verificación: `flutter analyze` → `No issues found!`, `flutter test` →
+  `All tests passed!` (49), `flutter build apk --debug` y `flutter build web`
+  correctos. Prueba manual en Android pendiente (no hay emulador/dispositivo
+  conectado en este equipo).
+- Estado: ✅ Hecho.
+
+### Build iOS / Codemagic 🟡 EN CURSO
+- Scaffold generado con `flutter create --org com.unicambio --platforms ios .`.
+  Bundle ID: `com.unicambio.unicambio`; deployment target: iOS 15.0.
+- `scripts/download_mlkit_bundles.sh` descarga los bundles que exigen los
+  plugins ML Kit 1.0.3: `MLKitImageLabelingResources.bundle`,
+  `MLKitObjectDetectionCommonResources.bundle` y `LatinOCRResources.bundle`
+  desde la release `9.0.3` de `d-date/google-mlkit-swiftpm`. Descarga probada.
+- `scripts/configure_ios_mlkit.rb` agrega esos bundles a **Copy Bundle
+  Resources** del target `Runner` y fija `OTHER_LDFLAGS` (`-ObjC`, `-all_load`).
+  Requiere la gema `xcodeproj`; se ejecuta en Codemagic (no hay Ruby/Xcode en
+  este equipo).
+- `codemagic.yaml` define el workflow `ios-unsigned`: `flutter pub get`,
+  `flutter analyze`, `flutter test`, descarga de bundles, configuración Ruby,
+  `flutter build ios --release --no-codesign` y empaquetado de `unicambio.ipa`.
+- `ios/Runner/Info.plist` ya tiene `NSCameraUsageDescription` y
+  `NSPhotoLibraryUsageDescription`.
+- **Pendiente:** autorizar Firebase CLI, ejecutar
+  `dart pub global run flutterfire_cli:flutterfire configure --platforms ios`,
+  generar `GoogleService-Info.plist` y completar `GIDClientID`,
+  `GIDServerClientID` y `CFBundleURLTypes` en `Info.plist`. Sin eso, iOS compila
+  pero Firebase/Google Sign-In fallan en tiempo de ejecución.
+- **Sideloadly/AltStore:** sin Apple Developer Program no hay TestFlight; el IPA
+  se reinstala con la cuenta gratuita (validez ~7 días). Si Sideloadly cambia el
+  Bundle ID al firmar, hay que registrar ese id en Firebase u ocultar Google
+  Sign-In en iOS.
 
 ### Backlog de mejoras (prioridad por definir)
 - **Chat / contacto al vendedor**: el botón hoy solo muestra un SnackBar.
@@ -489,3 +575,53 @@ bucket `articulos` en `{uid}/perfil/...` y se guarda en `photoURL`), quitarla
 (se borra del bucket) y cerrar sesión; también muestra cuántas publicaciones y
 favoritos tienes. Verificación: `flutter analyze` → `No issues found!` y
 `flutter test` → `All tests passed!` (30).
+
+## Actualización — Avance 10: sugerencias con ML Kit
+
+Al elegir una foto nueva en Android, `ServicioVisionMlKit` ejecuta etiquetado
+de imágenes y OCR latino de ML Kit en el dispositivo. `SugeridorPublicacion`
+convierte las etiquetas inglesas en una categoría (con umbral y margen) y
+propone un título desde el OCR, descartando precios, URLs, tallas y líneas de
+metadatos; si no hay texto útil, usa la etiqueta traducida. El panel muestra
+esas sugerencias junto a una descripción generada con plantillas locales, y el
+usuario decide campo por campo con "Usar"/"Reemplazar" o descarta todo. No se
+auto-rellena nada y no se sugiere precio.
+
+La descripción vive detrás de la interfaz `GeneradorDescripcion`; hoy
+`PlantillaGeneradorDescripcion` compone el texto por tipo y categoría y se
+recalcula si el usuario cambia venta/intercambio/regalo, categoría o título.
+Esto deja la puerta abierta a un LLM futuro sin tocar la pantalla. En web se
+evita ML Kit con `kIsWeb` (el build web compila y el formulario sigue
+funcionando). El servicio se crea perezosamente, se cierra en `dispose` y un
+token descarta resultados de una foto anterior.
+
+Dependencias nuevas: `google_mlkit_image_labeling` y
+`google_mlkit_text_recognition` (1.0.1). No se usa Gemini Nano/AICore porque
+requiere dispositivos compatibles y `minSdk 26`. Verificación: `flutter
+analyze` → `No issues found!`, `flutter test` → `All tests passed!` (49),
+`flutter build apk --debug` y `flutter build web` correctos. La prueba manual
+de las sugerencias en un teléfono/emulador Android queda pendiente porque este
+equipo no tiene dispositivos conectados.
+
+## Actualización — Build iOS en Codemagic (en curso)
+
+Se generó la carpeta `ios/` con el paquete `com.unicambio.unicambio` y el
+deployment target 15.0. El build se hará en Codemagic porque aquí no hay macOS:
+`codemagic.yaml` compila sin firma y empaqueta `unicambio.ipa` para instalarlo
+desde Windows con Sideloadly/AltStore y un Apple ID gratuito.
+
+Los plugins Flutter de ML Kit resueltos (`1.0.3`) usan SwiftPM
+`d-date/google-mlkit-swiftpm` `9.0.3`, no `9.0.2`. Por eso el script de bundles
+descarga esa versión y los tres recursos que exigen los plugins: etiquetado,
+objetos comunes y OCR latino. El script Ruby agrega los bundles a Copy Bundle
+Resources y las banderas del enlazador; la descarga se probó localmente, pero el
+Ruby no está instalado en Windows y solo se podrá ejecutar en Codemagic.
+
+Firebase iOS sigue **pendiente**: Firebase CLI está instalado, pero
+`firebase login:list` no tiene cuentas autorizadas. El intento de
+`firebase login --no-localhost` generó la sesión `E223E` y terminó con
+`Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), file src\win\async.c, line 76`.
+Cuando se obtenga el código de autorización hay que ejecutar
+`firebase login <authorizationCode>` y luego FlutterFire con `--platforms ios`.
+Hasta entonces `Info.plist` no lleva `GIDClientID`, `GIDServerClientID` ni la URL
+scheme invertida de Google.

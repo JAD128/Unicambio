@@ -14,11 +14,12 @@ cada avance.
 ```bash
 flutter pub get   # tras tocar pubspec.yaml
 flutter analyze   # -> No issues found!
-flutter test      # -> All tests passed!  (30 pruebas)
+flutter test      # -> All tests passed!  (49 pruebas)
 ```
 
-No hay CI: `analyze` + `test` son la única verificación. Ejecutar ambos tras
-cada cambio, en ese orden.
+No hay CI de pruebas: `analyze` + `test` son la única verificación local.
+Ejecutar ambos tras cada cambio, en ese orden. `codemagic.yaml` solo genera el
+IPA de iOS; no sustituye esta verificación.
 
 ## Arquitectura
 
@@ -57,6 +58,12 @@ Pantallas --context.watch/read--> ArticulosProvider (ChangeNotifier)
   `SUPABASE_SETUP.md`. Firebase Storage no se usa (Blaze no se pudo activar).
   El build de release necesita el permiso `INTERNET` en
   `android/app/src/main/AndroidManifest.xml`.
+- **Visión (Avance 10):** `ServicioVision` (`lib/datos/servicio_vision.dart`,
+  implementación ML Kit) devuelve etiquetas + OCR; `SugeridorPublicacion` y
+  `GeneradorDescripcion` son lógica pura (sin Flutter/ML Kit) y se prueban
+  aparte. La UI solo usa `PanelSugerencias` y callbacks. Las etiquetas de ML
+  Kit vienen en inglés; la traducción está en `sugeridor_publicacion.dart`.
+  No hay LLM: la descripción son plantillas locales.
 - API y getters exactos: ver `PROGRESO.md` §7 antes de tocar provider o
   repositorio.
 
@@ -68,6 +75,10 @@ Pantallas --context.watch/read--> ArticulosProvider (ChangeNotifier)
   `setUp` con `BaseDatos.instancia.eliminar()`.
 - Tests de provider y widgets usan `ArticuloRepositorioMemoria` (SQLite no
   corre en el entorno de test sin ffi).
+- La lógica de visión se prueba sin ML Kit:
+  `sugeridor_publicacion_test.dart`, `generador_descripcion_test.dart` y
+  `panel_sugerencias_test.dart`. Para inyectar dependencias en pruebas,
+  `PantallaPublicar` acepta `servicioVision:` y `generadorDescripcion:`.
 - Para un solo archivo: `flutter test test/articulos_provider_test.dart`.
 
 ## Convenciones del repo
@@ -94,5 +105,15 @@ Pantallas --context.watch/read--> ArticulosProvider (ChangeNotifier)
   proyecto.
 - Pantalla lenta en equipos Transsion/Tecno (GPU Mali): probar
   `flutter run --profile` o `--no-enable-impeller`.
+- ML Kit Vision solo corre en Android/iOS: en Chrome no se analiza la foto
+  (la UI lo evita con `kIsWeb`). El análisis es on-device y no necesita API
+  key. Las etiquetas llegan en inglés; el mapeo a categorías está en
+  `sugeridor_publicacion.dart`.
+- iOS ya tiene scaffold (`ios/`, Bundle ID `com.unicambio.unicambio`, target
+  15.0) y un workflow `ios-unsigned` en `codemagic.yaml` que produce
+  `unicambio.ipa` sin firma para Sideloadly. Los plugins ML Kit 1.0.3 exigen
+  SwiftPM `9.0.3`; `scripts/download_mlkit_bundles.sh` baja los 3 bundles y
+  `scripts/configure_ios_mlkit.rb` los registra con `xcodeproj`. Firebase iOS
+  está pendiente del login/FlutterFire; no marcarlo como configurado.
 - Deuda técnica consciente: la búsqueda en Firestore es en memoria (no hay
   `LIKE`); resolver en un avance futuro (`PROGRESO.md` §11).
