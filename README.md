@@ -32,13 +32,15 @@ Auth.
 - **Perfil:** cada cuenta publica con su nombre real; "Mis artículos" se
   filtra por `uidAutor`. Desde el avatar de Inicio se puede editar el nombre,
   cambiar o quitar la foto de perfil y cerrar sesión.
-- **Sugerencias con ML Kit (Android):** al elegir una foto, la app etiqueta la
-  imagen y hace OCR **en el dispositivo**. El formulario propone categoría,
-  título, descripción y líneas de texto; cada campo se aplica solo si tocas
-  "Usar"/"Reemplazar". No se sugiere precio ni se rellena nada solo. En web
-  esta función se omite y el formulario sigue funcionando.
-- **Pruebas:** 49 pruebas (repositorio con ffi, provider, almacenamiento,
-  lógica de visión y widgets).
+- **Sugerencias con ML Kit + Gemini (Android):** al elegir una foto, la app
+  etiqueta la imagen y hace OCR **en el dispositivo**; después envía ese
+  contexto y la foto a un **Cloudflare Worker** para pedir una sugerencia a
+  Gemini 3.5 Flash-Lite. El formulario propone categoría, título, descripción y
+  líneas de texto; cada campo se aplica solo si tocas "Usar"/"Reemplazar". No
+  se sugiere precio ni se rellena nada solo. Si el Worker falla, siguen las
+  plantillas locales. En web esta función se omite y el formulario funciona.
+- **Pruebas:** 58 pruebas (repositorio con ffi, provider, almacenamiento,
+  visión, LLM y widgets).
 - **iOS listo para Codemagic:** scaffold, Firebase/Google Sign-In y workflow
   `ios-unsigned` para producir un IPA sin firma e instalarlo con Sideloadly.
 
@@ -112,6 +114,16 @@ Firestore. `lib/config_supabase.dart` guarda `supabaseUrl` y
 `supabaseAnonKey`, y `AlmacenamientoImagenes` usa la API REST con `http` (sin
 SDK de Supabase). Pasos completos —crear el proyecto, el bucket público
 `articulos` y las políticas SQL— en **`SUPABASE_SETUP.md`**.
+
+### Sugerencias inteligentes (Gemini)
+
+Las sugerencias van por un **Cloudflare Worker** desplegado en
+`https://unicambio-sugerencias.unicambiodm26.workers.dev`. La app solo conoce
+esa URL (`lib/config_llm.dart`) y envía el ID token de Firebase; la API key de
+Gemini queda como secreto `GEMINI_API_KEY` en Cloudflare y nunca se incluye en
+Flutter ni en el IPA. Si el Worker no responde, la publicación sigue con ML Kit
+y plantillas locales. Detalles y comandos de despliegue en
+**`FIREBASE_SETUP.md`**; código del Worker en `proxy_gemini/`.
 
 ### Si se configura otra instalación o plataforma
 
@@ -201,6 +213,10 @@ Para usarlo:
    y galería. El detalle está en `FIREBASE_SETUP.md`.
 3. Descarga `unicambio.ipa` e instálalo desde Windows con Sideloadly o AltStore
    conectando el iPhone por USB. Sin Apple Developer Program no hay TestFlight.
+4. Para probar las sugerencias inteligentes: inicia sesión, entra en Publicar y
+   elige una foto; espera el panel de sugerencias y comprueba que la descripción
+   del LLM aparece. Cambia el tipo/título para ver el respaldo por plantillas y
+   desactiva la red para confirmar que la publicación no se bloquea.
 
 Con un Apple ID gratuito la firma suele durar unos 7 días y hay que reinstalar.
 Además, Sideloadly puede cambiar el Bundle ID al firmar; si ocurre, registra ese
@@ -214,7 +230,7 @@ flutter test
 ```
 
 Al actualizar este README, las verificaciones reportaron **No issues
-found!** y **All tests passed!** (49 pruebas). También compilan
+found!** y **All tests passed!** (58 pruebas). También compilan
 `flutter build apk --debug` y `flutter build web`.
 
 ## Estructura relevante
@@ -229,7 +245,7 @@ lib/
 │   ├── pantalla_favoritos.dart
 │   ├── pantalla_mis_articulos.dart
 │   └── pantalla_publicar.dart
-├── datos/                            # Repositorios, Supabase y visión (ML Kit)
+├── datos/                            # Repositorios, Supabase, visión y cliente LLM
 ├── estado/                           # Estado de artículos
 └── tema/                             # Tema visual Material 3
 test/

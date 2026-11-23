@@ -1,0 +1,9 @@
+{
+  "name": "unicambio-sugerencias",
+  "main": "src/index.js",
+  "compatibility_date": "2026-11-23",
+  "vars": {
+    "FIREBASE_PROJECT_ID": "unicambio-2f543",
+    "MODELO": "gemini-3.5-flash-lite"
+  }
+}

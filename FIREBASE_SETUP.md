@@ -125,8 +125,8 @@ Para reproducirlo:
    - `CLIENT_ID` → `GIDClientID`.
    - `REVERSED_CLIENT_ID` → URL scheme dentro de `CFBundleURLTypes`.
    - `SERVER_CLIENT_ID` → `GIDServerClientID` solo si el proveedor lo entrega.
-     En esta app no aparece y por eso no se agregó: el `idToken` se valida con
-     Firebase, sin backend propio.
+      En esta app no aparece y por eso no se agregó: el `idToken` se valida
+      contra Firebase; el proxy de sugerencias también lo verifica.
 
 3. `scripts/configure_ios_mlkit.rb` agrega `GoogleService-Info.plist` a Copy
    Bundle Resources del target `Runner` en Codemagic. Los bundles de ML Kit no
@@ -138,3 +138,72 @@ Para reproducirlo:
 
 Verificación: `DefaultFirebaseOptions.currentPlatform` devuelve el caso iOS y el
 IPA de Codemagic incluye el plist y la URL scheme.
+
+## Proxy de sugerencias con Gemini (Cloudflare Worker)
+
+`proxy_gemini/` es el backend del Avance 12. Mantiene la API key fuera de Flutter
+y del IPA. El Worker verifica el ID token de Firebase, por lo que solo usuarios
+autenticados pueden pedir sugerencias.
+
+1. Crea la key en **Google AI Studio → Get API key → Create API key**, selecciona
+   el proyecto de Google Cloud vinculado a `unicambio-2f543` y cópiala. Si la key
+   aparece sin restricciones, edítala y activa **Restrict key → Gemini API**.
+   No pegues la key en el chat ni en `lib/`.
+2. En la carpeta `proxy_gemini/`, copia `.dev.vars.example` a `.dev.vars` y pega
+   la key solo ahí para probar en local. `.dev.vars` ya está ignorado por Git.
+3. Instala y prueba el Worker:
+
+   ```powershell
+   npm install
+   npm run dev
+   ```
+
+   Debe responder `GET http://localhost:8787/health` con un JSON `"ok": true`.
+
+4. Entra a Cloudflare y sube el secreto. El comando te pedirá la key; no la
+   escribas como argumento:
+
+   ```powershell
+   npx wrangler login
+   npm run secret
+   npm run deploy
+   ```
+
+5. Wrangler imprimió la URL pública definitiva:
+   `https://unicambio-sugerencias.unicambiodm26.workers.dev`. No hace falta
+   tocar `wrangler.jsonc`: ya tiene `FIREBASE_PROJECT_ID=unicambio-2f543` y
+   `MODELO=gemini-3.5-flash-lite`. Para verificar, abre
+   `https://unicambio-sugerencias.unicambiodm26.workers.dev/health`; debe
+   devolver `"ok": true`.
+
+Contrato del endpoint:
+
+- `POST /sugerencias`
+- Header: `Authorization: Bearer <idToken de Firebase>`
+- Body: `{ "imagenBase64": "...", "mimeType": "image/jpeg", "tipoPublicacion": "venta", "etiquetas": [], "lineasTexto": [] }`
+- Respuesta correcta: `{ "categoria": "libros", "titulo": "...", "descripcion": "..." }`
+- Respuesta de error: `{ "error": "codigo", "mensaje": "..." }`
+
+Si el Worker no está desplegado o falla, la app sigue con ML Kit + plantillas
+locales: no se bloquea la publicación.
+
+### Conexión desde Flutter
+
+La app ya apunta al Worker desplegado. `lib/config_llm.dart` contiene solo la
+URL base (sin secretos) y se puede sobrescribir al compilar:
+
+```bash
+flutter run --dart-define=UNICAMBIO_LLM_URL=https://unicambio-sugerencias.unicambiodm26.workers.dev
+```
+
+`ClienteSugerenciasLlm` obtiene el ID token con
+`FirebaseAuth.instance.currentUser.getIdToken()` y lo envía como
+`Authorization: Bearer ...`. Por eso la pantalla de publicación requiere sesión
+iniciada; si no hay token, el cliente lanza un `StateError` y el decorador
+`ServicioVisionConLlm` conserva las sugerencias locales de ML Kit.
+
+`ServiciosPublicacion` crea el servicio compuesto y el sugeridor; la pantalla
+sigue usando `context.read<ArticulosProvider>()` para guardar. No hay cambios en
+`main.dart` ni en las demás pantallas. La descripción del LLM se muestra solo
+mientras el tipo de publicación no cambie; si cambia, se recalcula con
+`PlantillaGeneradorDescripcion`.

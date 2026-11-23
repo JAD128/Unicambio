@@ -3,9 +3,9 @@
 > Documento de contexto y bitácora. Léelo completo al retomar el trabajo para
 > no perder el hilo. Actualízalo al cerrar cada avance.
 
-Última actualización: cierre del **Avance 10 — visión por computadora con
-Google ML Kit** y configuración de Firebase/Google Sign-In en iOS para
-Codemagic.
+Última actualización: cierre del **Avance 13 — cierre iOS-ready** (proxy, LLM y
+ajustes de build en un solo commit). Firebase/Google/ML Kit en iOS ya fueron
+validados en el iPhone.
 
 ---
 
@@ -35,7 +35,9 @@ Codemagic.
 | 8 — Fotos reales | Selector, Supabase Storage, URL y migración SQLite | ✅ Hecho (falta crear bucket y políticas) |
 | 9 — Perfil y vendedor | `uidAutor`, perfil editable y nombre real | ✅ Hecho |
 | 10 — Visión (ML Kit) | Etiquetado + OCR y sugerencias en el formulario | ✅ Hecho |
-| 11 — Build iOS | Scaffold iOS, Firebase/Google, ML Kit y Codemagic | 🟡 En curso (reintentando build) |
+| 11 — Build iOS | Scaffold iOS, Firebase/Google, ML Kit y Codemagic | ✅ Hecho (IPA validado en iPhone) |
+| 12 — Sugerencias LLM (proxy) | Worker REST Gemini + cliente Flutter | ✅ Hecho (58 pruebas) |
+| 13 — Cierre iOS-ready | `.gitignore`, Gradle/AGP y docs del build | ✅ Hecho |
 
 > **Incidente del Avance 6**: al implementar la autenticación se reescribieron
 > `main.dart` y las pantallas usando datos de ejemplo estáticos
@@ -48,7 +50,7 @@ Verificación más reciente:
 
 ```bash
 flutter analyze   # -> No issues found!
-flutter test      # -> All tests passed!  (49 pruebas)
+flutter test      # -> All tests passed!  (58 pruebas)
 ```
 
 ---
@@ -274,7 +276,7 @@ ML Kit queda pendiente en un teléfono/emulador.
 
 ---
 
-## 9. Pruebas (49 en total)
+## 9. Pruebas (58 en total)
 
 - `articulo_repositorio_test.dart` (11): usa `sqflite_common_ffi`
   (`sqfliteFfiInit()` + `databaseFactory = databaseFactoryFfi`) y prueba el
@@ -290,6 +292,14 @@ ML Kit queda pendiente en un teléfono/emulador.
   sin precio y variante estable.
 - `panel_sugerencias_test.dart` (5): "Usar"/"Reemplazar"/"Descartar", líneas
   de OCR tocables y panel oculto sin sugerencias.
+- `cliente_sugerencias_llm_test.dart` (3): petición al Worker con token/foto,
+  falta de token y error HTTP con `MockClient`.
+- `cache_sugerencias_llm_test.dart` (2): misma imagen/tipo reutiliza entrada y
+  fotos o tipos distintos no colisionan.
+- `servicio_vision_con_llm_test.dart` (2): sugerencia agregada con caché y
+  conservación del resultado ML Kit cuando el proxy falla.
+- `sugeridor_publicacion_llm_test.dart` (2): prioridad del LLM y respaldo al
+  sugeridor local.
 - `widget_test.dart` (2): smoke tests de UI; envuelven pantallas con el provider
   y el repositorio en memoria.
 
@@ -415,12 +425,12 @@ ML Kit queda pendiente en un teléfono/emulador.
   formulario sigue funcionando. El servicio se crea de forma perezosa y se
   cierra en `dispose`; un token descarta resultados de una foto anterior.
 - Verificación: `flutter analyze` → `No issues found!`, `flutter test` →
-  `All tests passed!` (49), `flutter build apk --debug` y `flutter build web`
+  `All tests passed!` (58), `flutter build apk --debug` y `flutter build web`
   correctos. Prueba manual en Android pendiente (no hay emulador/dispositivo
   conectado en este equipo).
 - Estado: ✅ Hecho.
 
-### Build iOS / Codemagic 🟡 EN CURSO
+### Build iOS / Codemagic ✅ HECHO
 - Scaffold generado con `flutter create --org com.unicambio --platforms ios .`.
   Bundle ID: `com.unicambio.unicambio`; deployment target: iOS 15.0.
 - `scripts/download_mlkit_bundles.sh` descarga los bundles que exigen los
@@ -452,8 +462,8 @@ ML Kit queda pendiente en un teléfono/emulador.
   descarga en `ios/mlkit_bundles`, compila sin esas referencias y luego los copia
   directamente en `build/ios/iphoneos/Runner.app` antes de empaquetar. Como
   Sideloadly vuelve a firmar el IPA, no hay problema de firma.
-- **Pendiente:** volver a correr `ios-unsigned` en Codemagic, instalar
-  `unicambio.ipa` con Sideloadly y confirmar que arranca desde el home.
+- **Validado:** `ios-unsigned` con `c79a166` generó `unicambio.ipa`, se instaló
+  con Sideloadly y el usuario confirmó que arranca desde el home en el iPhone.
 - **Sideloadly/AltStore:** sin Apple Developer Program no hay TestFlight; el IPA
   se reinstala con la cuenta gratuita (validez ~7 días). Si Sideloadly cambia el
   Bundle ID al firmar, hay que registrar ese id en Firebase u ocultar Google
@@ -612,7 +622,7 @@ token descarta resultados de una foto anterior.
 Dependencias nuevas: `google_mlkit_image_labeling` y
 `google_mlkit_text_recognition` (1.0.1). No se usa Gemini Nano/AICore porque
 requiere dispositivos compatibles y `minSdk 26`. Verificación: `flutter
-analyze` → `No issues found!`, `flutter test` → `All tests passed!` (49),
+analyze` → `No issues found!`, `flutter test` → `All tests passed!` (58),
 `flutter build apk --debug` y `flutter build web` correctos. La prueba manual
 de las sugerencias en un teléfono/emulador Android queda pendiente porque este
 equipo no tiene dispositivos conectados.
@@ -645,5 +655,82 @@ para los tres bundles. Los archivos sí se descargaron; el problema era la
 resolución de los file refs en `project.pbxproj`, incluso con el patrón
 `wrapper.cbundle` del ejemplo oficial. Se descartó registrarlos en Xcode: el
 workflow ahora compila sin esas referencias y copia los bundles desde
-`ios/mlkit_bundles` directamente en `Runner.app` antes de generar el IPA. Queda
-reintentar `ios-unsigned` y probar la app en el iPhone.
+`ios/mlkit_bundles` directamente en `Runner.app` antes de generar el IPA. El
+usuario confirmó que `ios-unsigned` con `c79a166` instala y abre la app en el
+iPhone, así que esa deuda quedó cerrada.
+
+## Actualización — Proxy REST para sugerencias LLM (Avance 12)
+
+Se creó `proxy_gemini/` con un Cloudflare Worker que sirve `GET /health` y
+`POST /sugerencias`. El endpoint recibe la foto en base64, etiquetas/OCR de ML
+Kit y el tipo de publicación; verifica el ID token de Firebase, aplica un límite
+de 10 peticiones por minuto por usuario/IP y llama a la **Interactions API** de
+Gemini con el modelo `gemini-3.5-flash-lite`. La salida se valida antes de
+devolver `categoria`, `titulo` y `descripcion`; cualquier fallo devuelve un JSON
+de error para que Flutter mantenga el fallback local sin romper el formulario.
+
+Archivos nuevos:
+
+- `proxy_gemini/src/index.js`: lógica del Worker, prompt, CORS, validación y
+  rate limit.
+- `proxy_gemini/wrangler.jsonc`: variables públicas `FIREBASE_PROJECT_ID` y
+  `MODELO`.
+- `proxy_gemini/package.json`: dependencias `jose` y `wrangler`.
+- `proxy_gemini/.dev.vars.example`: plantilla para el único secreto,
+  `GEMINI_API_KEY`.
+- `.gitignore`: ignora `node_modules/`, `.dev.vars*`, `.wrangler/`.
+
+Verificación del Worker: `node --check src/index.js`, `npm install` (0
+vulnerabilidades), `npx wrangler deploy --dry-run` y `GET /health` en la URL
+desplegada, correctos. La key se guardó con `npx wrangler secret put
+GEMINI_API_KEY` y el deploy quedó en
+`https://unicambio-sugerencias.unicambiodm26.workers.dev`. La key no se escribe
+en el repo ni se envía desde la app.
+
+### Cableado en Flutter
+
+- `lib/config_llm.dart` guarda solo la URL base; se puede cambiar con
+  `--dart-define=UNICAMBIO_LLM_URL=...`.
+- `ClienteSugerenciasLlm` (`lib/datos/cliente_sugerencias_llm.dart`) hace
+  `POST /sugerencias` con la foto en base64, etiquetas/OCR de ML Kit y el ID
+  token de `FirebaseAuth.instance.currentUser`. El token se inyecta en pruebas
+  mediante `proveedorToken:`.
+- `ServicioVisionConLlm` envuelve al servicio ML Kit, lee los bytes con
+  `XFile.readAsBytes()` (sin `dart:io`, compatible con web), usa
+  `CacheSugerenciasLlm` y devuelve la sugerencia dentro de `ResultadoVision`.
+  Si falla red, token, cuota o JSON, devuelve el resultado local sin lanzar.
+- `SugeridorPublicacionLlm` prefiere categoría y título del LLM; la
+  descripción LLM se usa solo mientras el tipo de publicación no cambie. Si el
+  usuario cambia venta/intercambio/regalo o edita título/categoría, se vuelve a
+  la plantilla local.
+- `ServiciosPublicacion` (`lib/datos/servicios_publicacion.dart`) concentra la
+  fábrica; `PantallaPublicar` recibe `sugeridor:` opcional en pruebas y no se
+  tocó `main.dart` ni `pantalla_mis_articulos.dart`.
+- Pruebas nuevas: cliente HTTP con `MockClient`, caché por imagen/tipo,
+  decorador con fallback y prioridad del sugeridor. Total: **58 pruebas**;
+  `flutter analyze` → `No issues found!`, `flutter test` → `All tests passed!`.
+
+## Actualización — Avance 13: cierre iOS-ready
+
+Para que el Worker, el cableado LLM y los ajustes de build salgan en un solo
+commit se cerró esta deuda corta:
+
+- `.gitignore` ahora ignores `proxy_gemini/node_modules/`, `.dev.vars`,
+  `.dev.vars.*` y `.wrangler/`, pero permite versionar
+  `proxy_gemini/.dev.vars.example` con `!`. Así la plantilla del secreto viaja
+  con el repo y la key real nunca entra.
+- Android: Gradle `9.3.1` → `9.5.0` y Android Gradle Plugin `9.1.0` → `9.1.1`.
+- Documentación: el build iOS quedó marcado como validado, se eliminó el
+  “pendiente” viejo y se agregó el checklist de prueba LLM en iOS al README.
+
+Verificación previa al commit: `git check-ignore`, escaneo de secretos,
+`flutter analyze`, `flutter test` (58), `flutter build apk --debug`,
+`flutter build web` y `git diff --check`.
+
+Checklist de prueba en iOS tras instalar el nuevo IPA:
+
+1. Iniciar sesión (el ID token es obligatorio para el Worker).
+2. Publicar → elegir foto de galería o cámara → esperar las sugerencias.
+3. Confirmar que la descripción LLM aparece cuando el Worker responde.
+4. Cambiar tipo/título y verificar que se vuelve a la plantilla local.
+5. Desactivar red y repetir: no debe bloquearse la publicación.

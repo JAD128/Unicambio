@@ -7,7 +7,9 @@
 // simples y puede probarse sin usar la cámara ni los modelos nativos.
 // =============================================================================
 
+import 'articulo.dart';
 import 'categoria.dart';
+import 'sugerencia_llm.dart';
 
 /// Etiqueta detectada en una imagen, con su nivel de confianza (0 a 1).
 class EtiquetaImagen {
@@ -28,9 +30,13 @@ class ResultadoVision {
   /// Líneas de texto detectadas por OCR (pueden estar vacías).
   final List<String> lineasTexto;
 
+  /// Sugerencia del proxy LLM, si la petición terminó correctamente.
+  final SugerenciaLlm? sugerencia;
+
   const ResultadoVision({
     this.etiquetas = const <EtiquetaImagen>[],
     this.lineasTexto = const <String>[],
+    this.sugerencia,
   });
 
   /// `true` si no se obtuvo ninguna etiqueta ni texto.
@@ -39,9 +45,9 @@ class ResultadoVision {
 
 /// Sugerencias calculadas a partir de una foto.
 ///
-/// La descripción no se guarda aquí: se genera con el tipo y la categoría
-/// actuales del formulario, para que cambie si el usuario pasa de venta a
-/// regalo o intercambio.
+/// Si el proxy LLM respondió, [descripcion] se usa solo mientras el tipo de
+/// publicación siga siendo [tipoDescripcion]; si el usuario cambia de venta a
+/// regalo o intercambio, la pantalla vuelve a la descripción por plantillas.
 class SugerenciasPublicacion {
   /// Categoría sugerida, o `null` si no hubo etiquetas suficientemente claras.
   final Categoria? categoria;
@@ -52,12 +58,24 @@ class SugerenciasPublicacion {
   /// Líneas de texto detectadas, para que el usuario pueda elegir una.
   final List<String> lineasTexto;
 
+  /// Descripción escrita por el LLM (opcional).
+  final String? descripcion;
+
+  /// Tipo usado para generar [descripcion].
+  final TipoPublicacion? tipoDescripcion;
+
   const SugerenciasPublicacion({
     this.categoria,
     this.titulo,
     this.lineasTexto = const <String>[],
+    this.descripcion,
+    this.tipoDescripcion,
   });
 
   /// `true` si no hay nada útil que mostrar.
-  bool get vacia => categoria == null && titulo == null && lineasTexto.isEmpty;
+  bool get vacia =>
+      categoria == null &&
+      titulo == null &&
+      lineasTexto.isEmpty &&
+      descripcion == null;
 }

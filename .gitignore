@@ -49,3 +49,10 @@ app.*.map.json
 
 # Caché local del compilador de Kotlin (Android Studio)
 /android/.kotlin/
+
+# Proxy de sugerencias (Cloudflare Worker)
+/proxy_gemini/node_modules/
+/proxy_gemini/.dev.vars
+/proxy_gemini/.dev.vars.*
+!/proxy_gemini/.dev.vars.example
+/proxy_gemini/.wrangler/

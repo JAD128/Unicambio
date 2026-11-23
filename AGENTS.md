@@ -14,7 +14,7 @@ cada avance.
 ```bash
 flutter pub get   # tras tocar pubspec.yaml
 flutter analyze   # -> No issues found!
-flutter test      # -> All tests passed!  (49 pruebas)
+flutter test      # -> All tests passed!  (58 pruebas)
 ```
 
 No hay CI de pruebas: `analyze` + `test` son la única verificación local.
@@ -58,12 +58,15 @@ Pantallas --context.watch/read--> ArticulosProvider (ChangeNotifier)
   `SUPABASE_SETUP.md`. Firebase Storage no se usa (Blaze no se pudo activar).
   El build de release necesita el permiso `INTERNET` en
   `android/app/src/main/AndroidManifest.xml`.
-- **Visión (Avance 10):** `ServicioVision` (`lib/datos/servicio_vision.dart`,
-  implementación ML Kit) devuelve etiquetas + OCR; `SugeridorPublicacion` y
-  `GeneradorDescripcion` son lógica pura (sin Flutter/ML Kit) y se prueban
-  aparte. La UI solo usa `PanelSugerencias` y callbacks. Las etiquetas de ML
-  Kit vienen en inglés; la traducción está en `sugeridor_publicacion.dart`.
-  No hay LLM: la descripción son plantillas locales.
+- **Visión + LLM (Avance 12):** `ServicioVision` ML Kit devuelve etiquetas + OCR
+  y `ServicioVisionConLlm` (`lib/datos/servicio_vision_con_llm.dart`) decora ese
+  resultado con una sugerencia del Worker. `ClienteSugerenciasLlm` envía la
+  imagen en base64 junto al **ID token de Firebase** a
+  `https://unicambio-sugerencias.unicambiodm26.workers.dev/sugerencias`; la API
+  key solo existe como secreto `GEMINI_API_KEY` en Cloudflare. Si falla el
+  Worker, `ResultadoVision` conserva ML Kit y `SugeridorPublicacionLlm` usa el
+  respaldo local. `PlantillaGeneradorDescripcion` sigue vigente para cambios de
+  tipo/categoría/título y cuando no hay respuesta del LLM.
 - API y getters exactos: ver `PROGRESO.md` §7 antes de tocar provider o
   repositorio.
 
@@ -77,8 +80,11 @@ Pantallas --context.watch/read--> ArticulosProvider (ChangeNotifier)
   corre en el entorno de test sin ffi).
 - La lógica de visión se prueba sin ML Kit:
   `sugeridor_publicacion_test.dart`, `generador_descripcion_test.dart` y
-  `panel_sugerencias_test.dart`. Para inyectar dependencias en pruebas,
-  `PantallaPublicar` acepta `servicioVision:` y `generadorDescripcion:`.
+  `panel_sugerencias_test.dart`. La parte LLM se prueba con `MockClient` en
+  `cliente_sugerencias_llm_test.dart`, `cache_sugerencias_llm_test.dart`,
+  `servicio_vision_con_llm_test.dart` y `sugeridor_publicacion_llm_test.dart`.
+  Para inyectar dependencias en pruebas, `PantallaPublicar` acepta
+  `servicioVision:`, `generadorDescripcion:` y `sugeridor:`.
 - Para un solo archivo: `flutter test test/articulos_provider_test.dart`.
 
 ## Convenciones del repo
@@ -109,6 +115,13 @@ Pantallas --context.watch/read--> ArticulosProvider (ChangeNotifier)
   (la UI lo evita con `kIsWeb`). El análisis es on-device y no necesita API
   key. Las etiquetas llegan en inglés; el mapeo a categorías está en
   `sugeridor_publicacion.dart`.
+- El proxy ya está desplegado en
+  `https://unicambio-sugerencias.unicambiodm26.workers.dev` y se puede cambiar
+  con `--dart-define=UNICAMBIO_LLM_URL=...` (`lib/config_llm.dart`). Nunca
+  escribas la key de Gemini en Flutter: solo el Worker la conoce. Si el Worker
+  no responde, la publicación sigue funcionando con las plantillas locales. En
+  `proxy_gemini/` solo se versiona `.dev.vars.example`; `.dev.vars`,
+  `node_modules/` y `.wrangler/` están ignorados.
 - iOS tiene scaffold (`ios/`, Bundle ID `com.unicambio.unicambio`, target 15.0),
   Firebase/Google Sign-In configurados y un workflow `ios-unsigned` en
   `codemagic.yaml` que produce `unicambio.ipa` sin firma para Sideloadly. Los

@@ -19,6 +19,7 @@ import 'package:provider/provider.dart';
 import '../datos/almacenamiento_imagenes.dart';
 import '../datos/generador_descripcion.dart';
 import '../datos/servicio_vision.dart';
+import '../datos/servicios_publicacion.dart';
 import '../datos/sugeridor_publicacion.dart';
 import '../estado/articulos_provider.dart';
 import '../modelos/articulo.dart';
@@ -37,11 +38,15 @@ class PantallaPublicar extends StatefulWidget {
   /// Generador de descripciones (por defecto, plantillas locales).
   final GeneradorDescripcion generadorDescripcion;
 
+  /// Sugeridor inyectable; en la app usa LLM con respaldo local.
+  final SugeridorPublicacion? sugeridor;
+
   const PantallaPublicar({
     super.key,
     this.articulo,
     this.servicioVision,
     this.generadorDescripcion = const PlantillaGeneradorDescripcion(),
+    this.sugeridor,
   });
 
   @override
@@ -250,12 +255,14 @@ class _PantallaPublicarState extends State<PantallaPublicar> {
 
     try {
       final ServicioVision servicio = _servicioVision ??=
-          widget.servicioVision ?? ServicioVisionMlKit();
+          widget.servicioVision ??
+          ServiciosPublicacion.crearVision(tipoActual: () => _tipo);
       final ResultadoVision resultado = await servicio.analizar(archivo.path);
       if (!mounted || token != _tokenAnalisis) return;
 
-      final SugerenciasPublicacion sugerencias =
-          const SugeridorPublicacion().sugerir(resultado);
+      final SugeridorPublicacion sugeridor =
+          widget.sugeridor ?? ServiciosPublicacion.sugeridor;
+      final SugerenciasPublicacion sugerencias = sugeridor.sugerir(resultado);
       setState(() {
         _sugerencias = sugerencias.vacia ? null : sugerencias;
         _analizando = false;
@@ -271,6 +278,13 @@ class _PantallaPublicarState extends State<PantallaPublicar> {
 
   /// Texto sugerido para la descripción según el estado actual del formulario.
   String _descripcionSugerida(SugerenciasPublicacion sugerencias) {
+    final String? descripcionLlm = sugerencias.descripcion;
+    if (descripcionLlm != null &&
+        descripcionLlm.trim().isNotEmpty &&
+        sugerencias.tipoDescripcion == _tipo) {
+      return descripcionLlm.trim();
+    }
+
     final String tituloActual = _titulo.text.trim();
     final String? titulo =
         tituloActual.isNotEmpty ? tituloActual : sugerencias.titulo;
