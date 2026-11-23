@@ -4,7 +4,8 @@
 > no perder el hilo. Actualízalo al cerrar cada avance.
 
 Última actualización: cierre del **Avance 10 — visión por computadora con
-Google ML Kit** y preparación en curso del build iOS para Codemagic.
+Google ML Kit** y configuración de Firebase/Google Sign-In en iOS para
+Codemagic.
 
 ---
 
@@ -15,7 +16,7 @@ Google ML Kit** y preparación en curso del build iOS para Codemagic.
 
 - Directorio: `C:\Users\juand\Desktop\U\10mo\Desarrollo movil\Proyecto_Unicambio`
 - Paquete Dart: `unicambio` · organización `com.unicambio`
-- Plataformas habilitadas: `android`, `web`, `ios` (scaffold generado; Firebase iOS pendiente)
+- Plataformas habilitadas: `android`, `web`, `ios` (Firebase y Google Sign-In configurados)
 - Flutter 3.47.6 · Dart SDK `^3.13.0`
 
 ---
@@ -34,7 +35,7 @@ Google ML Kit** y preparación en curso del build iOS para Codemagic.
 | 8 — Fotos reales | Selector, Supabase Storage, URL y migración SQLite | ✅ Hecho (falta crear bucket y políticas) |
 | 9 — Perfil y vendedor | `uidAutor`, perfil editable y nombre real | ✅ Hecho |
 | 10 — Visión (ML Kit) | Etiquetado + OCR y sugerencias en el formulario | ✅ Hecho |
-| 11 — Build iOS | Scaffold iOS, scripts ML Kit y Codemagic | 🟡 En curso (Firebase iOS pendiente) |
+| 11 — Build iOS | Scaffold iOS, Firebase/Google, ML Kit y Codemagic | 🟡 En curso (reintentando build) |
 
 > **Incidente del Avance 6**: al implementar la autenticación se reescribieron
 > `main.dart` y las pantallas usando datos de ejemplo estáticos
@@ -425,21 +426,34 @@ ML Kit queda pendiente en un teléfono/emulador.
 - `scripts/download_mlkit_bundles.sh` descarga los bundles que exigen los
   plugins ML Kit 1.0.3: `MLKitImageLabelingResources.bundle`,
   `MLKitObjectDetectionCommonResources.bundle` y `LatinOCRResources.bundle`
-  desde la release `9.0.3` de `d-date/google-mlkit-swiftpm`. Descarga probada.
-- `scripts/configure_ios_mlkit.rb` agrega esos bundles a **Copy Bundle
-  Resources** del target `Runner` y fija `OTHER_LDFLAGS` (`-ObjC`, `-all_load`).
-  Requiere la gema `xcodeproj`; se ejecuta en Codemagic (no hay Ruby/Xcode en
-  este equipo).
+  desde la release `9.0.3` de `d-date/google-mlkit-swiftpm` en
+  `ios/mlkit_bundles`. Descarga probada.
+- `scripts/configure_ios_mlkit.rb` agrega `ios/Runner/GoogleService-Info.plist`
+  con `SOURCE_ROOT` y fija `OTHER_LDFLAGS` (`-ObjC`, `-all_load`) e iOS 15.0.
+  Ya no registra los bundles en Xcode: requiere la gema `xcodeproj` y se ejecuta
+  en Codemagic (no hay Ruby/Xcode en este equipo).
 - `codemagic.yaml` define el workflow `ios-unsigned`: `flutter pub get`,
   `flutter analyze`, `flutter test`, descarga de bundles, configuración Ruby,
-  `flutter build ios --release --no-codesign` y empaquetado de `unicambio.ipa`.
-- `ios/Runner/Info.plist` ya tiene `NSCameraUsageDescription` y
-  `NSPhotoLibraryUsageDescription`.
-- **Pendiente:** autorizar Firebase CLI, ejecutar
-  `dart pub global run flutterfire_cli:flutterfire configure --platforms ios`,
-  generar `GoogleService-Info.plist` y completar `GIDClientID`,
-  `GIDServerClientID` y `CFBundleURLTypes` en `Info.plist`. Sin eso, iOS compila
-  pero Firebase/Google Sign-In fallan en tiempo de ejecución.
+  `flutter build ios --release --no-codesign`, copia de los `.bundle` desde
+  `ios/mlkit_bundles` a `Runner.app`, verificación y empaquetado de
+  `unicambio.ipa`.
+- `ios/Runner/Info.plist` tiene `NSCameraUsageDescription`,
+  `NSPhotoLibraryUsageDescription`, `GIDClientID` y `CFBundleURLTypes` con la
+  URL scheme invertida. No lleva `GIDServerClientID` porque el plist no entregó
+  `SERVER_CLIENT_ID`.
+- Firebase CLI autorizado y FlutterFire ejecutado con Android/iOS/Web: el caso
+  iOS ya está en `lib/firebase_options.dart` y la app iOS quedó registrada como
+  `1:619158453000:ios:599f8dd2c8e9cdc9f3cabd`.
+- **Intentos 1 a 3:** Codemagic descargó los bundles, pero Xcode falló al
+  copiarlos: primero con un grupo anidado bajo `Runner`, luego con `SOURCE_ROOT`
+  y finalmente con el patrón `wrapper.cbundle` del ejemplo oficial. En los tres
+  casos Xcode no resolvió la ruta de los file refs.
+- **Corrección:** los bundles ya no se registran en el proyecto. El workflow los
+  descarga en `ios/mlkit_bundles`, compila sin esas referencias y luego los copia
+  directamente en `build/ios/iphoneos/Runner.app` antes de empaquetar. Como
+  Sideloadly vuelve a firmar el IPA, no hay problema de firma.
+- **Pendiente:** volver a correr `ios-unsigned` en Codemagic, instalar
+  `unicambio.ipa` con Sideloadly y confirmar que arranca desde el home.
 - **Sideloadly/AltStore:** sin Apple Developer Program no hay TestFlight; el IPA
   se reinstala con la cuenta gratuita (validez ~7 días). Si Sideloadly cambia el
   Bundle ID al firmar, hay que registrar ese id en Firebase u ocultar Google
@@ -603,7 +617,7 @@ analyze` → `No issues found!`, `flutter test` → `All tests passed!` (49),
 de las sugerencias en un teléfono/emulador Android queda pendiente porque este
 equipo no tiene dispositivos conectados.
 
-## Actualización — Build iOS en Codemagic (en curso)
+## Actualización — Build iOS en Codemagic
 
 Se generó la carpeta `ios/` con el paquete `com.unicambio.unicambio` y el
 deployment target 15.0. El build se hará en Codemagic porque aquí no hay macOS:
@@ -617,11 +631,19 @@ objetos comunes y OCR latino. El script Ruby agrega los bundles a Copy Bundle
 Resources y las banderas del enlazador; la descarga se probó localmente, pero el
 Ruby no está instalado en Windows y solo se podrá ejecutar en Codemagic.
 
-Firebase iOS sigue **pendiente**: Firebase CLI está instalado, pero
-`firebase login:list` no tiene cuentas autorizadas. El intento de
-`firebase login --no-localhost` generó la sesión `E223E` y terminó con
-`Assertion failed: !(handle->flags & UV_HANDLE_CLOSING), file src\win\async.c, line 76`.
-Cuando se obtenga el código de autorización hay que ejecutar
-`firebase login <authorizationCode>` y luego FlutterFire con `--platforms ios`.
-Hasta entonces `Info.plist` no lleva `GIDClientID`, `GIDServerClientID` ni la URL
-scheme invertida de Google.
+Firebase iOS ya **no está pendiente**: `firebase login:list` muestra
+`pauvan120@gmail.com` y FlutterFire registró el Bundle ID
+`com.unicambio.unicambio`. Como FlutterFire en Windows no escribe el plist,
+se descargó `ios/Runner/GoogleService-Info.plist` y se copiaron `CLIENT_ID` y
+`REVERSED_CLIENT_ID` a `ios/Runner/Info.plist` (`GIDClientID` y
+`CFBundleURLTypes`). No hay `SERVER_CLIENT_ID`, así que no se agregó
+`GIDServerClientID`. El script Ruby incluye el plist en el IPA.
+
+Tres builds de Codemagic llegaron a Xcode y fallaron con
+`The file "...Resources.bundle" couldn't be opened because there is no such file`
+para los tres bundles. Los archivos sí se descargaron; el problema era la
+resolución de los file refs en `project.pbxproj`, incluso con el patrón
+`wrapper.cbundle` del ejemplo oficial. Se descartó registrarlos en Xcode: el
+workflow ahora compila sin esas referencias y copia los bundles desde
+`ios/mlkit_bundles` directamente en `Runner.app` antes de generar el IPA. Queda
+reintentar `ios-unsigned` y probar la app en el iPhone.

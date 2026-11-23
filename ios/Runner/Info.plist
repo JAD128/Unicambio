@@ -30,6 +30,19 @@
 	<string>UniCambio usa la cámara para tomar fotos de los artículos que quieres publicar.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>UniCambio usa la galería para elegir fotos de artículos y de perfil.</string>
+		<key>GIDClientID</key>
+	<string>619158453000-sgn829k0r1jnfq14jrkg9heh5e2v2qh7.apps.googleusercontent.com</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.619158453000-sgn829k0r1jnfq14jrkg9heh5e2v2qh7</string>
+			</array>
+		</dict>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

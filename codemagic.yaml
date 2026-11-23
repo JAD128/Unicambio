@@ -15,13 +15,18 @@ workflows:
           flutter analyze
           flutter test
       - name: Descargar bundles de ML Kit 9.0.3
-        script: bash scripts/download_mlkit_bundles.sh 9.0.3
-      - name: Configurar Xcode para ML Kit
+        script: |
+          bash scripts/download_mlkit_bundles.sh 9.0.3
+          ls -la ios/mlkit_bundles
+      - name: Configurar Xcode para ML Kit y Firebase
         script: |
           gem install xcodeproj --no-document
           ruby scripts/configure_ios_mlkit.rb
       - name: Compilar iOS sin firma
-        script: flutter build ios --release --no-codesign
+        script: |
+          flutter build ios --release --no-codesign
+          cp -R ios/mlkit_bundles/*.bundle build/ios/iphoneos/Runner.app/
+          ls -la build/ios/iphoneos/Runner.app/*.bundle
       - name: Empaquetar IPA
         script: |
           rm -rf Payload unicambio.ipa

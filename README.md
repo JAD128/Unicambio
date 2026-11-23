@@ -39,9 +39,8 @@ Auth.
   esta función se omite y el formulario sigue funcionando.
 - **Pruebas:** 49 pruebas (repositorio con ffi, provider, almacenamiento,
   lógica de visión y widgets).
-- **iOS (en preparación):** scaffold generado y workflow de Codemagic para
-  producir un IPA sin firma e instalarlo con Sideloadly. Firebase/Google en iOS
-  siguen pendientes de configuración.
+- **iOS listo para Codemagic:** scaffold, Firebase/Google Sign-In y workflow
+  `ios-unsigned` para producir un IPA sin firma e instalarlo con Sideloadly.
 
 ## Cómo funciona la autenticación
 
@@ -81,9 +80,9 @@ el cambio de sesión hace que `_PuertaAutenticacion` vuelva a mostrar el acceso.
 ## Configuración de Firebase
 
 La app está vinculada al proyecto Firebase **UniCambio** (`unicambio-2f543`),
-con aplicaciones registradas para Android y Web (iOS pendiente). Para que el acceso funcione,
-el proveedor **Correo electrónico/contraseña** debe estar habilitado en Firebase
-Console:
+con aplicaciones registradas para Android, Web e iOS. Para que el acceso
+funcione, el proveedor **Correo electrónico/contraseña** debe estar habilitado
+en Firebase Console:
 
 1. Abre Firebase Console y selecciona el proyecto **UniCambio**.
 2. Ve a **Authentication → Sign-in method** (o **Proveedores de acceso**).
@@ -95,8 +94,9 @@ Console:
 
 | Archivo | Para qué sirve |
 |---|---|
-| `lib/firebase_options.dart` | Opciones Dart por plataforma (Android y Web). `main.dart` lee `DefaultFirebaseOptions.currentPlatform`. No editarlo a mano; vuelve a generar si agregas plataformas o cambias de proyecto. |
+| `lib/firebase_options.dart` | Opciones Dart por plataforma (Android, Web e iOS). `main.dart` lee `DefaultFirebaseOptions.currentPlatform`. No editarlo a mano; vuelve a generar si agregas plataformas o cambias de proyecto. |
 | `android/app/google-services.json` | Identifica la app Android ante Firebase y es leído por el plugin de Google Services. |
+| `ios/Runner/GoogleService-Info.plist` | Identifica la app iOS ante Firebase; se descarga de Firebase Console y Codemagic lo incluye en el IPA mediante el script Ruby. |
 | `firebase.json` | Metadatos de configuración usados por las herramientas Firebase. |
 | `android/settings.gradle.kts` | Declara la versión del plugin Gradle de Google Services. |
 | `android/app/build.gradle.kts` | Aplica el plugin de Google Services a la app Android. |
@@ -123,8 +123,10 @@ dart pub global run flutterfire_cli:flutterfire configure
 ```
 
 Elige el proyecto Firebase y las plataformas que se usarán. La CLI actualiza
-`lib/firebase_options.dart` y los ajustes de Android cuando corresponde. No es
-necesario copiar claves ni pasar `--dart-define` al ejecutar.
+`lib/firebase_options.dart` y los ajustes de Android cuando corresponde. En
+Windows no registra el plist de iOS: descárgalo y guárdalo en
+`ios/Runner/GoogleService-Info.plist` como se explica en `FIREBASE_SETUP.md`.
+No es necesario copiar claves ni pasar `--dart-define` al ejecutar.
 
 Si PowerShell no reconoce `firebase`, pero Firebase CLI ya está instalado en
 Windows, agrega su carpeta al `PATH` de la ventana actual y verifica la versión:
@@ -181,29 +183,23 @@ Para ejecutar en Android, conecta un dispositivo o inicia un emulador.
 
 Las cuentas creadas se ven en Firebase Console, en **Authentication → Users**.
 
-## Build iOS con Codemagic (en preparación)
+## Build iOS con Codemagic
 
-La plataforma iOS ya está generada con Bundle ID `com.unicambio.unicambio` y
-deployment target 15.0. No hace falta Mac: el workflow `ios-unsigned` de
-`codemagic.yaml` instala dependencias, corre `analyze` y `test`, descarga los
-bundles de ML Kit `9.0.3`, configura el proyecto Xcode, compila con
+La plataforma iOS ya está generada con Bundle ID `com.unicambio.unicambio`,
+deployment target 15.0 y Firebase/Google Sign-In configurados. No hace falta
+Mac: el workflow `ios-unsigned` de `codemagic.yaml` instala dependencias, corre
+`analyze` y `test`, descarga los bundles de ML Kit `9.0.3`, configura el
+proyecto Xcode (incluido `GoogleService-Info.plist`), compila con
 `flutter build ios --release --no-codesign` y deja el artefacto `unicambio.ipa`.
 
 Para usarlo:
 
-1. Sube el repo a GitHub y crea el workflow `ios-unsigned` en Codemagic.
-2. Antes de esperar login en iOS, completa la configuración pendiente:
-   ejecuta `firebase login` y
-   `dart pub global run flutterfire_cli:flutterfire configure --platforms ios`.
-   FlutterFire debe registrar `com.unicambio.unicambio`, generar
-   `ios/Runner/GoogleService-Info.plist` y agregar el caso iOS a
-   `lib/firebase_options.dart`.
-3. Copia de `GoogleService-Info.plist` a `ios/Runner/Info.plist` los valores
-   `CLIENT_ID` (`GIDClientID`), `SERVER_CLIENT_ID` (`GIDServerClientID`) y
-   `REVERSED_CLIENT_ID` (URL scheme de `CFBundleURLTypes`). Los permisos de
-   cámara y galería ya están agregados. Sin estos pasos, el IPA compila pero la
-   app no inicia Firebase/Google en iOS.
-4. Descarga `unicambio.ipa` e instálalo desde Windows con Sideloadly o AltStore
+1. Sube el repo a GitHub (incluye `ios/Runner/GoogleService-Info.plist`) y crea
+   el workflow `ios-unsigned` en Codemagic.
+2. Verifica antes de subir que `ios/Runner/Info.plist` tenga `GIDClientID` y la
+   URL scheme invertida en `CFBundleURLTypes`, además de los permisos de cámara
+   y galería. El detalle está en `FIREBASE_SETUP.md`.
+3. Descarga `unicambio.ipa` e instálalo desde Windows con Sideloadly o AltStore
    conectando el iPhone por USB. Sin Apple Developer Program no hay TestFlight.
 
 Con un Apple ID gratuito la firma suele durar unos 7 días y hay que reinstalar.

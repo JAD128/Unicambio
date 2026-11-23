@@ -2,7 +2,7 @@
 set -euo pipefail
 
 VERSION="${1:-9.0.3}"
-DEST_DIR="${MLKIT_BUNDLES_DIR:-ios/Runner/Resources/Bundles}"
+DEST_DIR="${MLKIT_BUNDLES_DIR:-ios/mlkit_bundles}"
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 

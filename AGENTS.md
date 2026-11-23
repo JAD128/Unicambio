@@ -109,11 +109,13 @@ Pantallas --context.watch/read--> ArticulosProvider (ChangeNotifier)
   (la UI lo evita con `kIsWeb`). El análisis es on-device y no necesita API
   key. Las etiquetas llegan en inglés; el mapeo a categorías está en
   `sugeridor_publicacion.dart`.
-- iOS ya tiene scaffold (`ios/`, Bundle ID `com.unicambio.unicambio`, target
-  15.0) y un workflow `ios-unsigned` en `codemagic.yaml` que produce
-  `unicambio.ipa` sin firma para Sideloadly. Los plugins ML Kit 1.0.3 exigen
-  SwiftPM `9.0.3`; `scripts/download_mlkit_bundles.sh` baja los 3 bundles y
-  `scripts/configure_ios_mlkit.rb` los registra con `xcodeproj`. Firebase iOS
-  está pendiente del login/FlutterFire; no marcarlo como configurado.
+- iOS tiene scaffold (`ios/`, Bundle ID `com.unicambio.unicambio`, target 15.0),
+  Firebase/Google Sign-In configurados y un workflow `ios-unsigned` en
+  `codemagic.yaml` que produce `unicambio.ipa` sin firma para Sideloadly. Los
+  plugins ML Kit 1.0.3 exigen SwiftPM `9.0.3`;
+  `scripts/download_mlkit_bundles.sh` baja los 3 bundles a `ios/mlkit_bundles`,
+  `codemagic.yaml` los copia en `Runner.app` después del build y
+  `scripts/configure_ios_mlkit.rb` registra `GoogleService-Info.plist` con
+  `xcodeproj`.
 - Deuda técnica consciente: la búsqueda en Firestore es en memoria (no hay
   `LIKE`); resolver en un avance futuro (`PROGRESO.md` §11).

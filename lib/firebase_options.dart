@@ -23,10 +23,7 @@ class DefaultFirebaseOptions {
       case TargetPlatform.android:
         return android;
       case TargetPlatform.iOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for ios - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return ios;
       case TargetPlatform.macOS:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for macos - '
@@ -65,5 +62,15 @@ class DefaultFirebaseOptions {
     messagingSenderId: '619158453000',
     projectId: 'unicambio-2f543',
     storageBucket: 'unicambio-2f543.firebasestorage.app',
+  );
+  static const FirebaseOptions ios = FirebaseOptions(
+    apiKey: 'AIzaSyDf5RPj4oNVmRhCsErrmdKLITo5K20Fhrw',
+    appId: '1:619158453000:ios:599f8dd2c8e9cdc9f3cabd',
+    messagingSenderId: '619158453000',
+    projectId: 'unicambio-2f543',
+    storageBucket: 'unicambio-2f543.firebasestorage.app',
+    androidClientId: '619158453000-78dbhue4lf5v23fl7f50nhfvhijbrv6j.apps.googleusercontent.com',
+    iosClientId: '619158453000-sgn829k0r1jnfq14jrkg9heh5e2v2qh7.apps.googleusercontent.com',
+    iosBundleId: 'com.unicambio.unicambio',
   );
 }
