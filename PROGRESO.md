@@ -1009,4 +1009,8 @@ Verificación final: `flutter analyze` → `No issues found!`, `flutter test` �
   puede desplazarse para que no tape los botones.
 - `_cerrarSesion` hace `popUntil` hasta la primera ruta: cerrar sesión desde
   Perfil ya no deja la pantalla de perfil abierta sobre el login.
+- El usuario reemplazó el arte de `assets/logo/unicambio.png` y
+  `assets/logo/unicambio_foreground.png`; se regeneraron iconos Android/iOS/web
+  y el splash con `dart run flutter_launcher_icons` y
+  `dart run flutter_native_splash:create`.
 - Verificación: `flutter analyze` sin issues y `flutter test` 97/97.
