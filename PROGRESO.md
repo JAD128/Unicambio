@@ -44,6 +44,7 @@ validados en el iPhone.
 | 16 — Estados de publicación | `disponible`/`finalizado`, etiquetas y acciones | ✅ Hecho (73 pruebas) |
 | 17 — WhatsApp + sugerencias | Contacto opcional, compartir texto y novedades in-app | ✅ Hecho (86 pruebas) |
 | 18 — Formulario y estética | Validaciones, tema iOS-inspired adaptable e iconos/splash | ✅ Hecho (97 pruebas) |
+| 19 — Liquid Glass (iOS 26+) | Vidrio nativo en hojas, botones y chips; fallback sin cambios | ✅ Hecho (97 pruebas) |
 
 > **Incidente del Avance 6**: al implementar la autenticación se reescribieron
 > `main.dart` y las pantallas usando datos de ejemplo estáticos
@@ -1014,3 +1015,19 @@ Verificación final: `flutter analyze` → `No issues found!`, `flutter test` �
   y el splash con `dart run flutter_launcher_icons` y
   `dart run flutter_native_splash:create`.
 - Verificación: `flutter analyze` sin issues y `flutter test` 97/97.
+
+## Avance 19 — Liquid Glass en superficies clave
+
+- Nueva dependencia justificada: `liquid_design: ^0.4.3`. Flutter 3.47.6 no trae
+  un equivalente oficial a Liquid Glass en Cupertino (Flutter #170310); el
+  paquete usa el material nativo de iOS 26+ y evita shaders globales.
+- `lib/tema/adaptativo.dart` expone `superficieCristalIos` y
+  `botonCristalIos`. Ambos comprueban `esIOS` y
+  `LiquidGlassService.isNativePlatform`, con `fallback: none` y
+  `renderer: native` para no alterar iOS 15-25, Android ni web.
+- `HojaAdaptativaIos` usa cristal cuando hay soporte y conserva asa, contenido y
+  el scroll del panel de filtros. "Aplicar", "Limpiar" y los chips de categoría
+  cambian solo en iOS 26+; en el resto siguen siendo
+  `FilledButton`/`OutlinedButton`/`ChoiceChip`.
+- Verificación: `flutter analyze` sin issues, `flutter test` 97/97. El vidrio
+  nativo debe revisarse en Codemagic con iOS 26; Windows solo valida el fallback.

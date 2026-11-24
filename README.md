@@ -55,6 +55,10 @@ Auth.
   (10-1000) y precio (≤ 99,999,999), y lleva el scroll al primer error. La misma
   interfaz iOS-inspired se adapta a Android e iOS (hojas y iconos nativos) y
   limita el ancho del formulario en web.
+- **Liquid Glass en iOS 26+:** las hojas, los botones de filtros y los chips de
+  categoría usan vidrio nativo con `liquid_design`; en iOS anterior, Android y
+  web se mantiene la interfaz actual. La validación visual requiere un iPhone
+  o simulador con iOS 26 (Codemagic).
 - **Pruebas:** 97 pruebas (repositorio con ffi, providers, almacenamiento,
   visión, LLM, filtros, WhatsApp, validadores del formulario y widgets).
 - **iOS listo para Codemagic:** scaffold, Firebase/Google Sign-In y workflow

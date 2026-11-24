@@ -104,6 +104,11 @@ Pantallas --context.watch/read--> ArticulosProvider (ChangeNotifier)
   `lib/utilidades/validadores_formulario.dart` contiene las reglas puras del
   formulario (título 5-80, descripción 10-1000, precio ≤ 99,999,999) y
   `PantallaPublicar` usa keys para llevar el scroll al primer campo inválido.
+- **Liquid Glass (Avance 19):** `liquid_design ^0.4.3` se usa solo en
+  superficies clave de iOS 26+: `superficieCristalIos`, `botonCristalIos` y
+  `HojaAdaptativaIos` en `lib/tema/adaptativo.dart`. Con `fallback: none`,
+  iOS 15-25, Android y web conservan el diseño anterior. No envolver toda la
+  app: el vidrio nativo solo se valida en Codemagic/iOS 26, no en Windows.
 - API y getters exactos: ver `PROGRESO.md` §7 antes de tocar provider o
   repositorio.
 

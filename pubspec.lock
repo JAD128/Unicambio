@@ -528,6 +528,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.1.0"
+  liquid_design:
+    dependency: "direct main"
+    description:
+      name: liquid_design
+      sha256: "066cbc92305ca2a79cb6f4ddc3957fac416e8ffd00923ba4391c51ba3ce2cc62"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.4.3"
   logging:
     dependency: transitive
     description:

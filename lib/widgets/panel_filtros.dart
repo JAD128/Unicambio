@@ -9,6 +9,7 @@
 import 'package:flutter/material.dart';
 
 import '../modelos/consulta_articulos.dart';
+import '../tema/adaptativo.dart';
 
 /// Valores que devuelve el panel cuando el usuario toca "Aplicar".
 class ValoresFiltros {
@@ -183,22 +184,46 @@ class _PanelFiltrosState extends State<PanelFiltros> {
             Row(
               children: <Widget>[
                 Expanded(
-                  child: OutlinedButton.icon(
+                  child: botonCristalIos(
+                    context: context,
                     key: const Key('filtro-limpiar'),
                     onPressed: () {
                       FocusScope.of(context).unfocus();
                       widget.alLimpiar();
                       Navigator.of(context).pop();
                     },
-                    icon: const Icon(Icons.restore),
-                    label: const Text('Limpiar'),
+                    alternativa: () => OutlinedButton.icon(
+                      key: const Key('filtro-limpiar'),
+                      onPressed: () {
+                        FocusScope.of(context).unfocus();
+                        widget.alLimpiar();
+                        Navigator.of(context).pop();
+                      },
+                      icon: const Icon(Icons.restore),
+                      label: const Text('Limpiar'),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Icon(Icons.restore, size: 18),
+                        SizedBox(width: 6),
+                        Text('Limpiar'),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: FilledButton(
+                  child: botonCristalIos(
+                    context: context,
                     key: const Key('filtro-aplicar'),
                     onPressed: _aplicar,
+                    destacado: true,
+                    alternativa: () => FilledButton(
+                      key: const Key('filtro-aplicar'),
+                      onPressed: _aplicar,
+                      child: const Text('Aplicar'),
+                    ),
                     child: const Text('Aplicar'),
                   ),
                 ),

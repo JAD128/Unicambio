@@ -8,6 +8,7 @@ import 'package:flutter/cupertino.dart' show showCupertinoModalPopup;
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:liquid_design/liquid_design.dart';
 
 import 'tema_app.dart';
 
@@ -37,6 +38,48 @@ EdgeInsets paddingConTeclado(BuildContext context) => EdgeInsets.fromLTRB(
       16,
       24 + MediaQuery.viewInsetsOf(context).bottom,
     );
+
+/// Envuelve [child] con Liquid Glass nativo solo en iOS 26+.
+///
+/// En Android, web y versiones anteriores de iOS se muestra [child] sin cambios.
+Widget superficieCristalIos(
+  BuildContext context, {
+  required Widget child,
+  LiquidGlassShape forma = const LiquidGlassShape.capsule(),
+  bool interactivo = false,
+}) {
+  return LiquidGlass(
+    enabled: esIOS,
+    shape: forma,
+    settings: LiquidGlassSettings(
+      fallback: LiquidGlassFallback.none,
+      renderer: LiquidGlassRenderer.native,
+      interactive: interactivo,
+    ),
+    child: child,
+  );
+}
+
+/// Botón con cristal nativo en iOS 26+ y el botón [alternativa] en el resto.
+Widget botonCristalIos({
+  required BuildContext context,
+  required Widget Function() alternativa,
+  required VoidCallback? onPressed,
+  required Widget child,
+  required Key key,
+  bool destacado = false,
+}) {
+  if (!esIOS || !LiquidGlassService.isNativePlatform) return alternativa();
+
+  return LiquidGlassButton(
+    key: key,
+    onPressed: onPressed,
+    style: destacado
+        ? LiquidGlassButtonStyle.tinted
+        : LiquidGlassButtonStyle.glass,
+    child: child,
+  );
+}
 
 /// Muestra una hoja inferior: Cupertino en iOS, Material en Android/web.
 Future<T?> mostrarHojaAdaptada<T>({
@@ -68,15 +111,19 @@ class HojaAdaptativaIos extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final bool conCristal = esIOS;
+
+    final Widget superficie = Container(
       key: const Key('hoja-adaptativa-ios'),
       width: double.infinity,
-      decoration: const BoxDecoration(
-        color: TemaApp.colorSuperficie,
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(TemaApp.radioTarjeta),
-        ),
-      ),
+      decoration: conCristal
+          ? null
+          : const BoxDecoration(
+              color: TemaApp.colorSuperficie,
+              borderRadius: BorderRadius.vertical(
+                top: Radius.circular(TemaApp.radioTarjeta),
+              ),
+            ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
@@ -94,5 +141,13 @@ class HojaAdaptativaIos extends StatelessWidget {
         ],
       ),
     );
+
+    return conCristal
+        ? superficieCristalIos(
+            context,
+            forma: LiquidGlassShape.roundedRect(TemaApp.radioTarjeta),
+            child: superficie,
+          )
+        : superficie;
   }
 }
