@@ -106,6 +106,7 @@ class _PanelFiltrosState extends State<PanelFiltros> {
       precioMinimo: minimo,
       precioMaximo: maximo,
     );
+    FocusScope.of(context).unfocus();
     widget.alAplicar(valores);
     Navigator.of(context).pop(valores);
   }
@@ -114,7 +115,7 @@ class _PanelFiltrosState extends State<PanelFiltros> {
   Widget build(BuildContext context) {
     final ThemeData tema = Theme.of(context);
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(
           20,
           12,
@@ -185,6 +186,7 @@ class _PanelFiltrosState extends State<PanelFiltros> {
                   child: OutlinedButton.icon(
                     key: const Key('filtro-limpiar'),
                     onPressed: () {
+                      FocusScope.of(context).unfocus();
                       widget.alLimpiar();
                       Navigator.of(context).pop();
                     },

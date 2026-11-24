@@ -78,6 +78,21 @@ void main() {
     expect(aplicados, isNull);
   });
 
+  testWidgets('el panel se puede desplazar cuando aparece el teclado',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(conPanel(alAplicar: (_) {}, alLimpiar: () {}));
+    await tester.tap(find.byKey(const Key('abrir-panel')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.ancestor(
+        of: find.byKey(const Key('filtro-aplicar')),
+        matching: find.byType(SingleChildScrollView),
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('el botón Limpiar avisa al padre', (WidgetTester tester) async {
     bool limpio = false;
     await tester.pumpWidget(

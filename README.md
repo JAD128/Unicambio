@@ -55,7 +55,7 @@ Auth.
   (10-1000) y precio (≤ 99,999,999), y lleva el scroll al primer error. La misma
   interfaz iOS-inspired se adapta a Android e iOS (hojas y iconos nativos) y
   limita el ancho del formulario en web.
-- **Pruebas:** 95 pruebas (repositorio con ffi, providers, almacenamiento,
+- **Pruebas:** 97 pruebas (repositorio con ffi, providers, almacenamiento,
   visión, LLM, filtros, WhatsApp, validadores del formulario y widgets).
 - **iOS listo para Codemagic:** scaffold, Firebase/Google Sign-In y workflow
   `ios-unsigned` para producir un IPA sin firma e instalarlo con Sideloadly.
@@ -248,7 +248,7 @@ flutter test
 ```
 
 Al actualizar este README, las verificaciones reportaron **No issues
-found!** y **All tests passed!** (95 pruebas). También compilan
+found!** y **All tests passed!** (97 pruebas). También compilan
 `flutter build apk --debug` y `flutter build web`.
 
 El logo definitivo está en `assets/logo/`. Si vuelve a cambiar,

@@ -14,7 +14,7 @@ cada avance.
 ```bash
 flutter pub get   # tras tocar pubspec.yaml
 flutter analyze   # -> No issues found!
-flutter test      # -> All tests passed!  (95 pruebas)
+flutter test      # -> All tests passed!  (97 pruebas)
 ```
 
 No hay CI de pruebas: `analyze` + `test` son la única verificación local.

@@ -28,6 +28,7 @@ import 'package:unicambio/pantallas/pantalla_publicar.dart';
 import 'package:unicambio/modelos/articulo.dart';
 import 'package:unicambio/modelos/categoria.dart';
 import 'package:unicambio/modelos/perfil_usuario.dart';
+import 'package:unicambio/tema/adaptativo.dart';
 import 'package:unicambio/tema/tema_app.dart';
 
 /// Lanzador falso que solo recuerda los mensajes enviados.
@@ -86,6 +87,21 @@ void main() {
 
     // El botón flotante para publicar debe existir.
     expect(find.text('Publicar'), findsNothing);
+  });
+
+  testWidgets('la hoja iOS tiene fondo opaco y asa',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: HojaAdaptativaIos(child: Text('Contenido de la hoja')),
+      ),
+    );
+
+    final Container hoja = tester.widget(
+      find.byKey(const Key('hoja-adaptativa-ios')),
+    );
+    expect((hoja.decoration! as BoxDecoration).color, TemaApp.colorSuperficie);
+    expect(find.text('Contenido de la hoja'), findsOneWidget);
   });
 
   testWidgets('Todas las pantallas se construyen sin errores',

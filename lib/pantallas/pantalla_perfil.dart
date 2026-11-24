@@ -107,15 +107,18 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
       context: context,
       builder: (BuildContext contexto) => AlertDialog(
         title: const Text('WhatsApp (opcional)'),
-        content: TextField(
-          controller: controlador,
-          autofocus: true,
-          keyboardType: TextInputType.phone,
-          decoration: const InputDecoration(
-            labelText: 'Celular a 10 dígitos',
-            prefixText: '+57 ',
-            helperText: 'Solo para que otros estudiantes puedan escribirte. No verificado.',
-            helperMaxLines: 2,
+        content: SingleChildScrollView(
+          child: TextField(
+            controller: controlador,
+            autofocus: true,
+            keyboardType: TextInputType.phone,
+            decoration: const InputDecoration(
+              labelText: 'Celular a 10 dígitos',
+              prefixText: '+57 ',
+              helperText:
+                  'Solo para que otros estudiantes puedan escribirte. No verificado.',
+              helperMaxLines: 2,
+            ),
           ),
         ),
         actions: <Widget>[
@@ -370,6 +373,7 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
 
   /// Cierra la sesión después de confirmar.
   Future<void> _cerrarSesion() async {
+    final NavigatorState navegador = Navigator.of(context, rootNavigator: true);
     final bool? confirmado = await showDialog<bool>(
       context: context,
       builder: (BuildContext contexto) => AlertDialog(
@@ -389,6 +393,7 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
     );
     if (confirmado != true) return;
     await FirebaseAuth.instance.signOut();
+    navegador.popUntil((Route<dynamic> ruta) => ruta.isFirst);
   }
 
   @override

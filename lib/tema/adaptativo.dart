@@ -9,6 +9,8 @@ import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 
+import 'tema_app.dart';
+
 /// `true` cuando la app corre en iOS (no en la web).
 bool get esIOS => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
 
@@ -42,7 +44,11 @@ Future<T?> mostrarHojaAdaptada<T>({
   required Widget Function(BuildContext) builder,
 }) {
   if (esIOS) {
-    return showCupertinoModalPopup<T>(context: context, builder: builder);
+    return showCupertinoModalPopup<T>(
+      context: context,
+      builder: (BuildContext contexto) =>
+          HojaAdaptativaIos(child: builder(contexto)),
+    );
   }
   return showModalBottomSheet<T>(
     context: context,
@@ -50,4 +56,43 @@ Future<T?> mostrarHojaAdaptada<T>({
     showDragHandle: true,
     builder: builder,
   );
+}
+
+/// Superficie opaca con asa para las hojas modales de iOS.
+class HojaAdaptativaIos extends StatelessWidget {
+  /// Contenido de la hoja.
+  final Widget child;
+
+  /// Constructor de la superficie.
+  const HojaAdaptativaIos({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const Key('hoja-adaptativa-ios'),
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        color: TemaApp.colorSuperficie,
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(TemaApp.radioTarjeta),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          const SizedBox(height: 10),
+          Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: TemaApp.colorSeparador,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Flexible(child: child),
+        ],
+      ),
+    );
+  }
 }

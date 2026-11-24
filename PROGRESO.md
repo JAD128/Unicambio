@@ -43,7 +43,7 @@ validados en el iPhone.
 | 15 — Paginación total | Sin `todos`: Inicio, Mis artículos y favoritos por cursor | ✅ Hecho (71 pruebas) |
 | 16 — Estados de publicación | `disponible`/`finalizado`, etiquetas y acciones | ✅ Hecho (73 pruebas) |
 | 17 — WhatsApp + sugerencias | Contacto opcional, compartir texto y novedades in-app | ✅ Hecho (86 pruebas) |
-| 18 — Formulario y estética | Validaciones, tema iOS-inspired adaptable e iconos/splash | ✅ Hecho (95 pruebas) |
+| 18 — Formulario y estética | Validaciones, tema iOS-inspired adaptable e iconos/splash | ✅ Hecho (97 pruebas) |
 
 > **Incidente del Avance 6**: al implementar la autenticación se reescribieron
 > `main.dart` y las pantallas usando datos de ejemplo estáticos
@@ -56,7 +56,7 @@ Verificación más reciente:
 
 ```bash
 flutter analyze   # -> No issues found!
-flutter test      # -> All tests passed!  (95 pruebas)
+flutter test      # -> All tests passed!  (97 pruebas)
 ```
 
 ---
@@ -992,9 +992,21 @@ Verificación final: `flutter analyze` → `No issues found!`, `flutter test` �
   `dart run flutter_launcher_icons` y `dart run flutter_native_splash:create`.
   En iOS se usa `remove_alpha_ios: true` para cumplir con App Store.
 - No se agregaron FCM/APNs, SMS ni chat: siguen fuera de alcance.
-- Pruebas nuevas: `validadores_formulario_test.dart` (8). Total: 95.
+- Pruebas nuevas: `validadores_formulario_test.dart` (8). Total: 97.
 - Verificación final: `flutter pub get`, `flutter analyze` → `No issues found!`,
-  `flutter test` → `All tests passed!` (95), `flutter build apk --debug` y
+  `flutter test` → `All tests passed!` (97), `flutter build apk --debug` y
   `flutter build web` correctos, `git diff --check` sin errores (solo avisos
   LF→CRLF de Windows). Falta regenerar el IPA con Codemagic con el logo
   definitivo ya integrado.
+
+## Ajustes posteriores al revert
+
+- `mostrarHojaAdaptada` ahora usa `HojaAdaptativaIos`: fondo blanco, esquinas
+  superiores y asa. Antes `showCupertinoModalPopup` dejaba transparente el
+  panel de filtros, el selector de foto y la bandeja de novedades en iOS.
+- `PanelFiltros` usa `SingleChildScrollView`, respeta el inset del teclado y
+  lo cierra al aplicar o limpiar; el diálogo del número de WhatsApp también
+  puede desplazarse para que no tape los botones.
+- `_cerrarSesion` hace `popUntil` hasta la primera ruta: cerrar sesión desde
+  Perfil ya no deja la pantalla de perfil abierta sobre el login.
+- Verificación: `flutter analyze` sin issues y `flutter test` 97/97.
