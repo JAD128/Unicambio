@@ -16,6 +16,7 @@ import 'package:unicambio/datos/articulo_repositorio_memoria.dart';
 import 'package:unicambio/estado/articulos_provider.dart';
 import 'package:unicambio/modelos/articulo.dart';
 import 'package:unicambio/modelos/categoria.dart';
+import 'package:unicambio/modelos/consulta_articulos.dart';
 
 /// Repositorio de prueba que simula los cambios en tiempo real de Firestore.
 class RepositorioPruebaTiempoReal extends ArticuloRepositorioMemoria {
@@ -29,7 +30,12 @@ class RepositorioPruebaTiempoReal extends ArticuloRepositorioMemoria {
   Stream<List<Articulo>> observarTodos() => _cambios.stream;
 
   /// Simula que otro usuario publicó/eliminó artículos.
-  void emitir(List<Articulo> articulos) => _cambios.add(articulos);
+  void emitir(List<Articulo> articulos) {
+    for (final Articulo articulo in articulos) {
+      insertar(articulo);
+    }
+    _cambios.add(articulos);
+  }
 
   Future<void> cerrar() => _cambios.close();
 }
@@ -38,20 +44,24 @@ class RepositorioPruebaTiempoReal extends ArticuloRepositorioMemoria {
 Articulo crearArticulo({
   required String id,
   required String titulo,
+  String descripcion = 'desc',
+  double precio = 1000,
   Categoria categoria = Categoria.libros,
   bool esFavorito = false,
   String? uidAutor,
+  EstadoPublicacion estado = EstadoPublicacion.disponible,
 }) {
   return Articulo(
     id: id,
     titulo: titulo,
-    descripcion: 'desc',
-    precio: 1000,
+    descripcion: descripcion,
+    precio: precio,
     categoria: categoria,
     tipo: TipoPublicacion.venta,
     vendedor: 'Tester',
     esFavorito: esFavorito,
     uidAutor: uidAutor,
+    estado: estado,
   );
 }
 
@@ -81,7 +91,6 @@ void main() {
   test('iniciar carga todos los artículos', () async {
     await provider.iniciar();
 
-    expect(provider.todos, hasLength(3));
     expect(provider.articulos, hasLength(3));
     expect(provider.listaVacia, isFalse);
     expect(provider.error, isNull);
@@ -138,6 +147,7 @@ void main() {
     expect(proveedor.mios, isEmpty);
 
     proveedor.configurarUsuario(uid: 'uid-1', nombre: 'Ana');
+    await proveedor.cargarMis();
     expect(proveedor.vendedorActual, 'Ana');
     expect(proveedor.mios.map((Articulo a) => a.id), <String>['a']);
   });
@@ -147,7 +157,7 @@ void main() {
 
     await provider.insertar(crearArticulo(id: '4', titulo: 'Nuevo'));
 
-    expect(provider.todos, hasLength(4));
+    expect(provider.articulos, hasLength(4));
     expect(provider.articuloPorId('4'), isNotNull);
   });
 
@@ -164,7 +174,7 @@ void main() {
 
     await provider.eliminar('1');
 
-    expect(provider.todos, hasLength(2));
+    expect(provider.articulos, hasLength(2));
     expect(provider.articuloPorId('1'), isNull);
   });
 
@@ -186,25 +196,155 @@ void main() {
     expect(provider.articuloPorId('no-existe'), isNull);
   });
 
+  test('actualizarFiltros aplica texto, precio y orden; limpiar restablece',
+      () async {
+    final ArticulosProvider filtrado = ArticulosProvider(
+      ArticuloRepositorioMemoria(
+        iniciales: <Articulo>[
+          crearArticulo(
+            id: '1',
+            titulo: 'Libro',
+            descripcion: 'cuaderno',
+            precio: 100,
+          ),
+          crearArticulo(
+            id: '2',
+            titulo: 'Mochila',
+            descripcion: 'cuaderno escolar',
+            precio: 300,
+          ),
+          crearArticulo(
+            id: '3',
+            titulo: 'Otro',
+            descripcion: 'sin filtro',
+            precio: 200,
+          ),
+        ],
+      ),
+    );
+    await filtrado.iniciar();
+
+    await filtrado.actualizarFiltros(
+      precioMinimo: 100,
+      precioMaximo: 300,
+      orden: OrdenArticulos.precioDesc,
+    );
+    expect(
+      filtrado.articulos.map((Articulo a) => a.id).toList(),
+      <String>['2', '3', '1'],
+    );
+
+    await filtrado.actualizarBusqueda('escolar');
+    expect(filtrado.articulos.map((Articulo a) => a.id).toList(), <String>['2']);
+
+    await filtrado.limpiarFiltros();
+    expect(filtrado.textoBusqueda, isEmpty);
+    expect(filtrado.precioMinimo, isNull);
+    expect(filtrado.precioMaximo, isNull);
+    expect(filtrado.orden, OrdenArticulos.titulo);
+    expect(filtrado.articulos, hasLength(3));
+  });
+
+  test('cargarMas anexa la página siguiente y agota el cursor', () async {
+    final List<Articulo> muchos = List<Articulo>.generate(
+      14,
+      (int i) => crearArticulo(
+        id: '${i + 1}',
+        titulo: 'Artículo ${14 - i}',
+      ),
+    );
+    final ArticulosProvider paginado = ArticulosProvider(
+      ArticuloRepositorioMemoria(iniciales: muchos),
+    );
+    await paginado.iniciar();
+
+    expect(paginado.articulos, hasLength(12));
+    expect(paginado.hayMas, isTrue);
+
+    await paginado.cargarMas();
+
+    expect(paginado.articulos, hasLength(14));
+    expect(paginado.hayMas, isFalse);
+    expect(paginado.cargandoMas, isFalse);
+  });
+
   test('los cambios en tiempo real actualizan las listas', () async {
     final RepositorioPruebaTiempoReal repositorio =
         RepositorioPruebaTiempoReal();
     final ArticulosProvider enVivo = ArticulosProvider(repositorio);
 
     await enVivo.iniciar();
-    expect(enVivo.todos, isEmpty);
+    expect(enVivo.articulos, isEmpty);
 
     repositorio.emitir(<Articulo>[
       crearArticulo(id: '9', titulo: 'Publicado en vivo'),
       crearArticulo(id: '10', titulo: 'Otro artículo'),
     ]);
-    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(const Duration(milliseconds: 10));
 
-    expect(enVivo.todos, hasLength(2));
     expect(enVivo.articulos, hasLength(2));
     expect(enVivo.error, isNull);
 
     enVivo.dispose();
     await repositorio.cerrar();
+  });
+
+  test('cargarMis pagina y cargarMasMis agota el cursor', () async {
+    final List<Articulo> mios = List<Articulo>.generate(
+      14,
+      (int i) => crearArticulo(
+        id: 'm${i + 1}',
+        titulo: 'Artículo ${14 - i}',
+        uidAutor: 'uid-1',
+      ),
+    );
+    final ArticulosProvider paginado = ArticulosProvider(
+      ArticuloRepositorioMemoria(iniciales: mios),
+    );
+    paginado.configurarUsuario(uid: 'uid-1', nombre: 'Ana');
+    await paginado.cargarMis();
+
+    expect(paginado.mios, hasLength(12));
+    expect(paginado.hayMasMis, isTrue);
+
+    await paginado.cargarMasMis();
+
+    expect(paginado.mios, hasLength(14));
+    expect(paginado.hayMasMis, isFalse);
+  });
+
+  test('cargarFavoritos pagina y cargarMasFavoritos agota el cursor', () async {
+    final List<Articulo> favoritos = List<Articulo>.generate(
+      14,
+      (int i) => crearArticulo(
+        id: 'f${i + 1}',
+        titulo: 'Favorito ${14 - i}',
+        esFavorito: true,
+      ),
+    );
+    final ArticulosProvider paginado = ArticulosProvider(
+      ArticuloRepositorioMemoria(iniciales: favoritos),
+    );
+    await paginado.cargarFavoritos();
+
+    expect(paginado.favoritos, hasLength(12));
+    expect(paginado.hayMasFavoritos, isTrue);
+
+    await paginado.cargarMasFavoritos();
+
+    expect(paginado.favoritos, hasLength(14));
+    expect(paginado.hayMasFavoritos, isFalse);
+  });
+
+  test('cambiarEstado actualiza la caché y las listas', () async {
+    await provider.iniciar();
+
+    await provider.cambiarEstado('1', EstadoPublicacion.finalizado);
+
+    expect(provider.articuloPorId('1')!.estado, EstadoPublicacion.finalizado);
+    expect(
+      provider.articulos.firstWhere((Articulo a) => a.id == '1').estado,
+      EstadoPublicacion.finalizado,
+    );
   });
 }

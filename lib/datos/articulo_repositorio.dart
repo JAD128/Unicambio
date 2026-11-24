@@ -16,6 +16,8 @@ import 'package:sqflite/sqflite.dart';
 
 import '../modelos/articulo.dart';
 import '../modelos/categoria.dart';
+import '../modelos/consulta_articulos.dart';
+import '../modelos/pagina_articulos.dart';
 import 'base_datos.dart';
 
 /// Contrato con todas las operaciones disponibles sobre los artículos.
@@ -44,8 +46,26 @@ abstract class ArticuloRepositorio {
   /// Cambia el estado de favorito del artículo con ese [id] (marca/desmarca).
   Future<void> alternarFavorito(String id);
 
-  /// Busca artículos cuyo título contenga [texto] y, opcionalmente, que
-  /// pertenezcan a una [categoria].
+  /// Busca artículos aplicando todos los filtros de [consulta], devolviendo
+  /// una página y un [PaginaArticulos.cursor] opaco para continuar.
+  Future<PaginaArticulos> buscarPagina(
+    ConsultaArticulos consulta, {
+    Object? cursor,
+  });
+
+  /// Devuelve una página de favoritos del usuario actual.
+  ///
+  /// En Firestore los favoritos viven en `usuarios/{uid}/favoritos`, por lo que
+  /// no puede expresarse como un filtro de [buscarPagina]. El cursor es opaco.
+  Future<PaginaArticulos> buscarPaginaFavoritos({
+    required int limite,
+    Object? cursor,
+  });
+
+  /// Busca todos los artículos que coinciden con [texto] y [categoria].
+  ///
+  /// Se conserva para el código histórico y las pruebas; la app usa
+  /// [buscarPagina] para que la lista de Inicio no lea toda la colección.
   Future<List<Articulo>> buscar(String texto, {Categoria? categoria});
 
   /// Devuelve los artículos de una [categoria].
@@ -171,41 +191,104 @@ class ArticuloRepositorioSqflite implements ArticuloRepositorio {
 
   @override
   Future<List<Articulo>> buscar(String texto, {Categoria? categoria}) async {
-    final Database db = await _db;
+    final PaginaArticulos pagina = await buscarPagina(
+      ConsultaArticulos(texto: texto, categoria: categoria, limite: null),
+    );
+    return pagina.articulos;
+  }
 
-    // Construimos la condición WHERE dinámicamente solo con los filtros activos.
+  /// Traduce el orden de la consulta a un `ORDER BY` de SQLite.
+  String _ordenSql(ConsultaArticulos consulta) {
+    final OrdenArticulos orden = consulta.ordenEfectivo;
+    if (orden == OrdenArticulos.titulo) return 'titulo ASC, id ASC';
+    final String sentido = orden.descendente ? 'DESC' : 'ASC';
+    return 'precio $sentido, titulo ASC, id ASC';
+  }
+
+  @override
+  Future<PaginaArticulos> buscarPagina(
+    ConsultaArticulos consulta, {
+    Object? cursor,
+  }) async {
+    final Database db = await _db;
     final List<String> condiciones = <String>[];
     final List<Object?> argumentos = <Object?>[];
 
-    final String textoLimpio = texto.trim();
+    final String textoLimpio = consulta.texto.trim();
     if (textoLimpio.isNotEmpty) {
-      // `LIKE %texto%` busca coincidencias parciales en el título.
-      condiciones.add('titulo LIKE ?');
-      argumentos.add('%$textoLimpio%');
+      condiciones.add('(titulo LIKE ? OR descripcion LIKE ?)');
+      argumentos.addAll(<Object?>['%$textoLimpio%', '%$textoLimpio%']);
     }
-    if (categoria != null) {
+    if (consulta.categoria != null) {
       condiciones.add('categoria = ?');
-      argumentos.add(categoria.name);
+      argumentos.add(consulta.categoria!.name);
+    }
+    if (consulta.precioMinimo != null) {
+      condiciones.add('precio >= ?');
+      argumentos.add(consulta.precioMinimo);
+    }
+    if (consulta.precioMaximo != null) {
+      condiciones.add('precio <= ?');
+      argumentos.add(consulta.precioMaximo);
+    }
+    if (consulta.uidAutor != null) {
+      condiciones.add('uidAutor = ?');
+      argumentos.add(consulta.uidAutor);
     }
 
+    final int? limite = consulta.limite;
+    final int desplazamiento =
+        cursor is int && cursor >= 0 ? cursor : 0;
     final List<Map<String, Object?>> filas = await db.query(
       BaseDatos.tablaArticulos,
       where: condiciones.isEmpty ? null : condiciones.join(' AND '),
       whereArgs: argumentos.isEmpty ? null : argumentos,
-      orderBy: _orden,
+      orderBy: _ordenSql(consulta),
+      limit: limite == null ? null : limite + 1,
+      offset: limite == null ? null : desplazamiento,
     );
-    return filas.map(Articulo.fromMap).toList();
+
+    if (limite == null) {
+      return PaginaArticulos(
+        articulos: filas.map(Articulo.fromMap).toList(),
+      );
+    }
+
+    final bool hayMas = filas.length > limite;
+    final List<Map<String, Object?>> visibles =
+        filas.take(limite).toList();
+    return PaginaArticulos(
+      articulos: visibles.map(Articulo.fromMap).toList(),
+      cursor: desplazamiento + visibles.length,
+      hayMas: hayMas,
+    );
   }
 
   @override
-  Future<List<Articulo>> filtrarPorCategoria(Categoria categoria) async {
+  Future<PaginaArticulos> buscarPaginaFavoritos({
+    required int limite,
+    Object? cursor,
+  }) async {
     final Database db = await _db;
+    final int desplazamiento = cursor is int && cursor >= 0 ? cursor : 0;
     final List<Map<String, Object?>> filas = await db.query(
       BaseDatos.tablaArticulos,
-      where: 'categoria = ?',
-      whereArgs: <Object?>[categoria.name],
-      orderBy: _orden,
+      where: 'esFavorito = 1',
+      orderBy: _ordenSql(const ConsultaArticulos()),
+      limit: limite + 1,
+      offset: desplazamiento,
     );
-    return filas.map(Articulo.fromMap).toList();
+
+    final bool hayMas = filas.length > limite;
+    final List<Map<String, Object?>> visibles = filas.take(limite).toList();
+    return PaginaArticulos(
+      articulos: visibles.map(Articulo.fromMap).toList(),
+      cursor: desplazamiento + visibles.length,
+      hayMas: hayMas,
+    );
   }
+
+  @override
+  Future<List<Articulo>> filtrarPorCategoria(Categoria categoria) =>
+      buscar('', categoria: categoria);
 }

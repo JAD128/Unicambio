@@ -162,6 +162,7 @@ class _PantallaPublicarState extends State<PantallaPublicar> {
         esFavorito: widget.articulo?.esFavorito ?? false,
         imagenUrl: imagenUrl,
         uidAutor: widget.articulo?.uidAutor ?? proveedor.uidActual,
+        estado: widget.articulo?.estado ?? EstadoPublicacion.disponible,
       );
 
       if (_esEdicion) {

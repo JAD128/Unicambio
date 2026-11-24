@@ -20,6 +20,7 @@ import '../modelos/categoria.dart';
 import '../widgets/campo_busqueda.dart';
 import '../widgets/chip_categoria.dart';
 import '../widgets/estado_placeholder.dart';
+import '../widgets/panel_filtros.dart';
 import '../widgets/tarjeta_articulo.dart';
 import 'pantalla_detalle_articulo.dart';
 import 'pantalla_perfil.dart';
@@ -96,6 +97,7 @@ class PantallaInicio extends StatelessWidget {
                   textoInicial: proveedor.textoBusqueda,
                   alCambiar: (String texto) =>
                       context.read<ArticulosProvider>().actualizarBusqueda(texto),
+                  alFiltrar: () => _mostrarFiltros(context, proveedor),
                 ),
               ],
             ),
@@ -134,7 +136,7 @@ class PantallaInicio extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Text(
-              'Artículos recientes',
+              'Resultados (${proveedor.articulos.length}${proveedor.hayMas ? '+' : ''})',
               style: tema.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.bold,
               ),
@@ -147,6 +149,30 @@ class PantallaInicio extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// Abre el panel de filtros y aplica los valores elegidos al provider.
+  Future<void> _mostrarFiltros(
+    BuildContext context,
+    ArticulosProvider proveedor,
+  ) async {
+    final ValoresFiltros? valores = await showModalBottomSheet<ValoresFiltros>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => PanelFiltros(
+        orden: proveedor.orden,
+        precioMinimo: proveedor.precioMinimo,
+        precioMaximo: proveedor.precioMaximo,
+        alAplicar: (ValoresFiltros valor) => valor,
+        alLimpiar: () => proveedor.limpiarFiltros(),
+      ),
+    );
+    if (valores == null || !context.mounted) return;
+    await context.read<ArticulosProvider>().actualizarFiltros(
+          precioMinimo: valores.precioMinimo,
+          precioMaximo: valores.precioMaximo,
+          orden: valores.orden,
+        );
   }
 }
 
@@ -186,8 +212,26 @@ class _CuerpoLista extends StatelessWidget {
         mainAxisSpacing: 12,
         childAspectRatio: 0.72,
       ),
-      itemCount: proveedor.articulos.length,
+      itemCount: proveedor.articulos.length + (proveedor.hayMas ? 1 : 0),
       itemBuilder: (BuildContext context, int indice) {
+        if (indice == proveedor.articulos.length) {
+          return Center(
+            child: OutlinedButton.icon(
+              key: const Key('cargar-mas'),
+              onPressed: proveedor.cargandoMas
+                  ? null
+                  : () => proveedor.cargarMas(),
+              icon: proveedor.cargandoMas
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.expand_more),
+              label: Text(proveedor.cargandoMas ? 'Cargando...' : 'Cargar más'),
+            ),
+          );
+        }
         final Articulo articulo = proveedor.articulos[indice];
         return TarjetaArticulo(
           articulo: articulo,

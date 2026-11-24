@@ -1,0 +1,143 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "articulos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "categoria",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "titulo",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "articulos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "categoria",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "precio",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "articulos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "categoria",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "precio",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "articulos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "uidAutor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "titulo",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "articulos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "uidAutor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "precio",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "articulos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "uidAutor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "precio",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "articulos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "uidAutor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "categoria",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "titulo",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "articulos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "uidAutor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "categoria",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "precio",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "articulos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "uidAutor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "categoria",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "precio",
+          "order": "DESCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

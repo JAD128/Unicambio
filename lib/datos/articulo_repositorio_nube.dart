@@ -22,6 +22,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../modelos/articulo.dart';
 import '../modelos/categoria.dart';
+import '../modelos/consulta_articulos.dart';
+import '../modelos/pagina_articulos.dart';
 import 'articulo_repositorio.dart';
 
 /// Implementación de [ArticuloRepositorio] sobre Cloud Firestore.
@@ -135,26 +137,156 @@ class ArticuloRepositorioNube implements ArticuloRepositorio {
 
   @override
   Future<List<Articulo>> buscar(String texto, {Categoria? categoria}) async {
-    // Firestore no busca substrings en texto: filtramos en memoria.
-    final List<Articulo> todos = await obtenerTodos();
-    final String consulta = texto.trim().toLowerCase();
-    return todos.where((Articulo articulo) {
-      final coincideTexto =
-          consulta.isEmpty || articulo.titulo.toLowerCase().contains(consulta);
-      final coincideCategoria =
-          categoria == null || articulo.categoria == categoria;
-      return coincideTexto && coincideCategoria;
-    }).toList();
+    final PaginaArticulos pagina = await buscarPagina(
+      ConsultaArticulos(texto: texto, categoria: categoria, limite: null),
+    );
+    return pagina.articulos;
   }
 
   @override
-  Future<List<Articulo>> filtrarPorCategoria(Categoria categoria) async {
-    final QuerySnapshot<Map<String, dynamic>> datos = await _articulos
-        .where('categoria', isEqualTo: categoria.name)
-        .orderBy('titulo')
-        .get();
-    return _marcarFavoritos(_desdeSnapshots(datos));
+  Future<PaginaArticulos> buscarPagina(
+    ConsultaArticulos consulta, {
+    Object? cursor,
+  }) async {
+    final String firma = consulta.firma;
+    Query<Map<String, dynamic>> query = _articulos;
+    if (consulta.categoria != null) {
+      query = query.where('categoria', isEqualTo: consulta.categoria!.name);
+    }
+    if (consulta.precioMinimo != null) {
+      query = query.where(
+        'precio',
+        isGreaterThanOrEqualTo: consulta.precioMinimo,
+      );
+    }
+    if (consulta.precioMaximo != null) {
+      query = query.where('precio', isLessThanOrEqualTo: consulta.precioMaximo);
+    }
+    if (consulta.uidAutor != null) {
+      query = query.where('uidAutor', isEqualTo: consulta.uidAutor);
+    }
+
+    // Con un rango de precio, Firestore exige ordenar primero por `precio`.
+    final OrdenArticulos orden = consulta.ordenEfectivo;
+    query = query.orderBy(orden.campo, descending: orden.descendente);
+
+    DocumentSnapshot<Map<String, dynamic>>? documentoInicial;
+    if (cursor != null) {
+      if (cursor is! _CursorNube || cursor.firma != firma) {
+        throw StateError('El paginador cambió. Vuelve a aplicar los filtros.');
+      }
+      documentoInicial = cursor.documento;
+      query = query.startAfterDocument(documentoInicial);
+    }
+
+    final String texto = consulta.texto.trim().toLowerCase();
+    bool coincideTexto(DocumentSnapshot<Map<String, dynamic>> doc) {
+      if (texto.isEmpty) return true;
+      final Map<String, dynamic>? datos = doc.data();
+      final String titulo = (datos?['titulo'] as String? ?? '').toLowerCase();
+      final String descripcion =
+          (datos?['descripcion'] as String? ?? '').toLowerCase();
+      return titulo.contains(texto) || descripcion.contains(texto);
+    }
+
+    final int? limite = consulta.limite;
+    if (limite == null) {
+      final QuerySnapshot<Map<String, dynamic>> datos = await query.get();
+      final List<_ParDocumento> pares = datos.docs
+          .where(coincideTexto)
+          .map((DocumentSnapshot<Map<String, dynamic>> doc) => _ParDocumento(
+                _desdeSnapshot(doc),
+                doc,
+              ))
+          .toList();
+      final List<Articulo> marcados =
+          await _marcarFavoritos(pares.map((p) => p.articulo).toList());
+      return PaginaArticulos(
+        articulos: marcados,
+        cursor: pares.isEmpty ? null : pares.last.documento,
+      );
+    }
+
+    // Firestore no busca substrings: leemos lotes hasta llenar la página con
+    // coincidencias reales. El cursor final es el último artículo devuelto.
+    final int objetivo = limite + 1;
+    final List<_ParDocumento> acumulados = <_ParDocumento>[];
+    DocumentSnapshot<Map<String, dynamic>>? ultimoLeido;
+    while (acumulados.length < objetivo) {
+      final int pedido = objetivo - acumulados.length;
+      Query<Map<String, dynamic>> lote = query;
+      if (ultimoLeido != null) {
+        lote = lote.startAfterDocument(ultimoLeido);
+      }
+      final QuerySnapshot<Map<String, dynamic>> datos =
+          await lote.limit(pedido).get();
+      if (datos.docs.isEmpty) break;
+      for (final DocumentSnapshot<Map<String, dynamic>> doc in datos.docs) {
+        if (coincideTexto(doc)) {
+          acumulados.add(_ParDocumento(_desdeSnapshot(doc), doc));
+        }
+      }
+      ultimoLeido = datos.docs.last;
+      if (datos.docs.length < pedido) break;
+    }
+
+    final List<Articulo> marcados =
+        await _marcarFavoritos(acumulados.map((p) => p.articulo).toList());
+    final List<_ParDocumento> resultado = <_ParDocumento>[
+      for (int i = 0; i < acumulados.length; i++)
+        _ParDocumento(marcados[i], acumulados[i].documento),
+    ];
+    final List<_ParDocumento> visibles = resultado.take(limite).toList();
+    return PaginaArticulos(
+      articulos: visibles.map((p) => p.articulo).toList(),
+      cursor: visibles.isEmpty
+          ? null
+          : _CursorNube(visibles.last.documento, firma),
+      hayMas: resultado.length > limite,
+    );
   }
+
+  @override
+  Future<PaginaArticulos> buscarPaginaFavoritos({
+    required int limite,
+    Object? cursor,
+  }) async {
+    Query<Map<String, dynamic>> query =
+        _favoritos().orderBy(FieldPath.documentId);
+    if (cursor != null) {
+      if (cursor is! _CursorFavoritos) {
+        throw StateError(
+          'El paginador de favoritos cambió. Vuelve a abrir la lista.',
+        );
+      }
+      query = query.startAfterDocument(cursor.documento);
+    }
+
+    final QuerySnapshot<Map<String, dynamic>> datos =
+        await query.limit(limite + 1).get();
+    final bool hayMas = datos.docs.length > limite;
+    final List<DocumentSnapshot<Map<String, dynamic>>> visibles =
+        datos.docs.take(limite).toList();
+    final List<DocumentSnapshot<Map<String, dynamic>>> documentos =
+        await Future.wait(
+      visibles.map((favorito) => _articulos.doc(favorito.id).get()),
+    );
+    final List<Articulo> articulos = <Articulo>[];
+    for (final DocumentSnapshot<Map<String, dynamic>> doc in documentos) {
+      if (!doc.exists || doc.data() == null) continue;
+      articulos.add(_desdeSnapshot(doc).copyWith(esFavorito: true));
+    }
+
+    return PaginaArticulos(
+      articulos: articulos,
+      cursor: visibles.isEmpty ? null : _CursorFavoritos(visibles.last),
+      hayMas: hayMas,
+    );
+  }
+
+  @override
+  Future<List<Articulo>> filtrarPorCategoria(Categoria categoria) =>
+      buscar('', categoria: categoria);
 
   // ---------------------------------------------------------------------------
   // Métodos auxiliares privados
@@ -177,6 +309,11 @@ class ArticuloRepositorioNube implements ArticuloRepositorio {
       vendedor: datos['vendedor'] as String,
       imagenUrl: datos['imagenUrl'] as String?,
       uidAutor: datos['uidAutor'] as String?,
+      estado: EstadoPublicacion.values.firstWhere(
+        (EstadoPublicacion valor) =>
+            valor.name == (datos['estado'] as String? ?? 'disponible'),
+        orElse: () => EstadoPublicacion.disponible,
+      ),
     );
   }
 
@@ -193,6 +330,7 @@ class ArticuloRepositorioNube implements ArticuloRepositorio {
         'vendedor': articulo.vendedor,
         'imagenUrl': articulo.imagenUrl,
         'uidAutor': _auth.currentUser?.uid ?? '',
+        'estado': articulo.estado.name,
       };
 
   /// Devuelve los ids marcados como favorito por el usuario actual.
@@ -210,4 +348,28 @@ class ArticuloRepositorioNube implements ArticuloRepositorio {
             articulo.copyWith(esFavorito: favoritos.contains(articulo.id)))
         .toList();
   }
+}
+
+/// Par internally usado para no perder el documento de Firestore al marcar
+/// favoritos: el documento es necesario para `startAfterDocument`.
+class _ParDocumento {
+  final Articulo articulo;
+  final DocumentSnapshot<Map<String, dynamic>> documento;
+
+  const _ParDocumento(this.articulo, this.documento);
+}
+
+/// Cursor opaco de Firestore; la firma evita reutilizarlo con otra consulta.
+class _CursorNube {
+  final DocumentSnapshot<Map<String, dynamic>> documento;
+  final String firma;
+
+  const _CursorNube(this.documento, this.firma);
+}
+
+/// Cursor opaco de la página de favoritos (último documento de la subcolección).
+class _CursorFavoritos {
+  final DocumentSnapshot<Map<String, dynamic>> documento;
+
+  const _CursorFavoritos(this.documento);
 }

@@ -71,9 +71,10 @@ Los artículos y favoritos se guardan en **Cloud Firestore** mediante
 1. En Firebase Console, abre **Firestore Database → Create database**.
    Elige **Production mode** y la región más cercana (p. ej.
    `southamerica-east1`). Espera a que esté activa.
-2. Publica las reglas de seguridad del proyecto (archivo `firestore.rules` en
-   la raíz): los artículos solo los edita su autor y cada usuario gestiona
-   sus propios favoritos. Desde la terminal, con la CLI de Firebase:
+ 2. Publica las reglas de seguridad del proyecto (archivo `firestore.rules` en
+    la raíz): los artículos solo los edita su autor, cada usuario gestiona
+    sus propios favoritos y `estado` solo puede ser `disponible` o
+    `finalizado`. Desde la terminal, con la CLI de Firebase:
 
    ```powershell
    firebase deploy --only firestore:rules
@@ -81,7 +82,17 @@ Los artículos y favoritos se guardan en **Cloud Firestore** mediante
 
    O manualmente: **Firestore → Rules**, pega el contenido de
    `firestore.rules` y pulsa **Publish**.
-3. No hace falta crear colecciones a mano: `insertar` las crea al primer
+ 3. Publica los índices compuestos (categoría y `uidAutor` con título/precio en
+    ambos sentidos, además de las combinaciones de tres campos):
+
+   ```powershell
+   firebase deploy --only firestore:indexes
+   ```
+
+   También puedes crearlos a mano desde **Firestore → Indexes** usando
+   `firestore.indexes.json` como guía. Sin estos índices, los filtros combinados
+   fallan con un enlace "Create index" en la consola.
+4. No hace falta crear colecciones a mano: `insertar` las crea al primer
    uso.
 
 ## Fotos de artículos (Avance 8)

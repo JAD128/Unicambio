@@ -17,10 +17,14 @@ class CampoBusqueda extends StatelessWidget {
   /// Texto que aparece al abrir la pantalla (el que quedó en el provider).
   final String textoInicial;
 
+  /// Se llama al tocar el ícono de filtros.
+  final VoidCallback? alFiltrar;
+
   const CampoBusqueda({
     super.key,
     this.alCambiar,
     this.textoInicial = '',
+    this.alFiltrar,
   });
 
   @override
@@ -31,8 +35,14 @@ class CampoBusqueda extends StatelessWidget {
       decoration: InputDecoration(
         hintText: 'Buscar artículos...',
         prefixIcon: const Icon(Icons.search),
-        // Ícono de filtros a la derecha (decorativo por ahora).
-        suffixIcon: const Icon(Icons.tune),
+        suffixIcon: alFiltrar == null
+            ? const Icon(Icons.tune)
+            : IconButton(
+                key: const Key('buscar-filtros'),
+                icon: const Icon(Icons.tune),
+                tooltip: 'Filtros y orden',
+                onPressed: alFiltrar,
+              ),
         // El tema ya define el relleno, bordes y colores; no repetimos aquí.
       ),
     );

@@ -39,8 +39,15 @@ Auth.
   líneas de texto; cada campo se aplica solo si tocas "Usar"/"Reemplazar". No
   se sugiere precio ni se rellena nada solo. Si el Worker falla, siguen las
   plantillas locales. En web esta función se omite y el formulario funciona.
-- **Pruebas:** 58 pruebas (repositorio con ffi, provider, almacenamiento,
-  visión, LLM y widgets).
+- **Búsqueda avanzada:** el ícono `tune` de Inicio abre filtros por orden y
+  rango de precio; los resultados llegan por páginas desde Firestore con un
+  botón "Cargar más". Inicio, "Mis artículos" y favoritos cargan por páginas;
+  el detalle se actualiza por id.
+- **Estados de publicación:** cada artículo está `Disponible` o finalizado
+  (`Vendido`, `Intercambiado` o `Entregado`). En "Mis artículos" puedes marcarlo
+  como finalizado o volver a disponible; el detalle deshabilita el contacto.
+- **Pruebas:** 73 pruebas (repositorio con ffi, provider, almacenamiento,
+  visión, LLM, filtros y widgets).
 - **iOS listo para Codemagic:** scaffold, Firebase/Google Sign-In y workflow
   `ios-unsigned` para producir un IPA sin firma e instalarlo con Sideloadly.
 
@@ -192,6 +199,8 @@ Para ejecutar en Android, conecta un dispositivo o inicia un emulador.
     "Usar" en categoría/título/descripción, una línea de OCR y "Descartar".
     Verifica que cambiar la foto reemplaza las sugerencias y que en Chrome no
     se intenta analizar.
+11. En Inicio, escribe en la búsqueda, abre el ícono `tune`, aplica orden y
+    rango de precio, y pulsa "Cargar más" hasta agotar los resultados.
 
 Las cuentas creadas se ven en Firebase Console, en **Authentication → Users**.
 
@@ -230,7 +239,7 @@ flutter test
 ```
 
 Al actualizar este README, las verificaciones reportaron **No issues
-found!** y **All tests passed!** (58 pruebas). También compilan
+found!** y **All tests passed!** (73 pruebas). También compilan
 `flutter build apk --debug` y `flutter build web`.
 
 ## Estructura relevante
@@ -247,12 +256,15 @@ lib/
 │   └── pantalla_publicar.dart
 ├── datos/                            # Repositorios, Supabase, visión y cliente LLM
 ├── estado/                           # Estado de artículos
+├── modelos/                          # ConsultaArticulos y PaginaArticulos
+├── widgets/                          # PanelSugerencias y PanelFiltros
 └── tema/                             # Tema visual Material 3
 test/
 ├── widget_test.dart                  # Pruebas de widgets
 ├── sugeridor_publicacion_test.dart   # Etiquetas/OCR → sugerencias
 ├── generador_descripcion_test.dart   # Plantillas de descripción
-└── panel_sugerencias_test.dart       # Panel de sugerencias
+├── panel_sugerencias_test.dart       # Panel de sugerencias
+└── panel_filtros_test.dart           # Orden y rango de precio
 ```
 
 ## Tecnologías
@@ -276,4 +288,4 @@ test/
 - Verificación de correo.
 - Prueba manual de las sugerencias de ML Kit en un dispositivo/emulador
   Android (el build APK ya compila).
-- Chat con el vendedor, notificaciones y búsqueda avanzada.
+- Chat con el vendedor y notificaciones.

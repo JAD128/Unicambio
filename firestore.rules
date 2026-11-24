@@ -12,11 +12,13 @@ service cloud.firestore {
         && request.resource.data.uidAutor == request.auth.uid
         && request.resource.data.titulo is string
         && request.resource.data.titulo.size() > 0
-        && request.resource.data.precio is number;
+        && request.resource.data.precio is number
+        && request.resource.data.estado in ['disponible', 'finalizado'];
 
       allow update: if request.auth != null
         && resource.data.uidAutor == request.auth.uid
-        && request.resource.data.uidAutor == resource.data.uidAutor;
+        && request.resource.data.uidAutor == resource.data.uidAutor
+        && request.resource.data.estado in ['disponible', 'finalizado'];
 
       allow delete: if request.auth != null
         && resource.data.uidAutor == request.auth.uid;

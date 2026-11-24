@@ -17,22 +17,26 @@ import 'package:unicambio/datos/articulo_repositorio.dart';
 import 'package:unicambio/datos/base_datos.dart';
 import 'package:unicambio/modelos/articulo.dart';
 import 'package:unicambio/modelos/categoria.dart';
+import 'package:unicambio/modelos/consulta_articulos.dart';
+import 'package:unicambio/modelos/pagina_articulos.dart';
 
 /// Crea un artículo de prueba con valores por defecto fáciles de cambiar.
 Articulo crearArticulo({
   String id = 'x1',
   String titulo = 'Artículo de prueba',
+  String descripcion = 'Descripción de prueba',
   Categoria categoria = Categoria.libros,
   TipoPublicacion tipo = TipoPublicacion.venta,
   double precio = 1000,
   bool esFavorito = false,
   String? imagenUrl,
   String? uidAutor,
+  EstadoPublicacion estado = EstadoPublicacion.disponible,
 }) {
   return Articulo(
     id: id,
     titulo: titulo,
-    descripcion: 'Descripción de prueba',
+    descripcion: descripcion,
     precio: precio,
     categoria: categoria,
     tipo: tipo,
@@ -40,6 +44,7 @@ Articulo crearArticulo({
     esFavorito: esFavorito,
     imagenUrl: imagenUrl,
     uidAutor: uidAutor,
+    estado: estado,
   );
 }
 
@@ -188,6 +193,86 @@ void main() {
     expect(resultado.first.id, 'a2');
   });
 
+  test('buscarPagina avanza con el cursor y avisa cuando no hay más', () async {
+    await repositorio.insertar(crearArticulo(id: '1', titulo: 'Alpha'));
+    await repositorio.insertar(crearArticulo(id: '2', titulo: 'Bravo'));
+    await repositorio.insertar(crearArticulo(id: '3', titulo: 'Charlie'));
+    await repositorio.insertar(crearArticulo(id: '4', titulo: 'Delta'));
+    await repositorio.insertar(crearArticulo(id: '5', titulo: 'Echo'));
+
+    final PaginaArticulos primera = await repositorio.buscarPagina(
+      const ConsultaArticulos(limite: 2),
+    );
+    final PaginaArticulos segunda = await repositorio.buscarPagina(
+      const ConsultaArticulos(limite: 2),
+      cursor: primera.cursor,
+    );
+    final PaginaArticulos tercera = await repositorio.buscarPagina(
+      const ConsultaArticulos(limite: 2),
+      cursor: segunda.cursor,
+    );
+
+    expect(primera.articulos.map((Articulo a) => a.titulo), <String>[
+      'Alpha',
+      'Bravo',
+    ]);
+    expect(primera.hayMas, isTrue);
+    expect(segunda.articulos.map((Articulo a) => a.titulo), <String>[
+      'Charlie',
+      'Delta',
+    ]);
+    expect(segunda.hayMas, isTrue);
+    expect(tercera.articulos.map((Articulo a) => a.titulo), <String>['Echo']);
+    expect(tercera.hayMas, isFalse);
+  });
+
+  test('buscarPagina busca también en la descripción', () async {
+    await repositorio.insertar(
+      crearArticulo(
+        id: '1',
+        titulo: 'Cuaderno',
+        descripcion: 'Hojas cuadriculadas para apuntes',
+      ),
+    );
+    await repositorio.insertar(
+      crearArticulo(id: '2', titulo: 'Mochila', descripcion: 'Para la universidad'),
+    );
+
+    final PaginaArticulos pagina = await repositorio.buscarPagina(
+      const ConsultaArticulos(texto: 'cuadriculadas'),
+    );
+
+    expect(pagina.articulos, hasLength(1));
+    expect(pagina.articulos.first.id, '1');
+  });
+
+  test('buscarPagina aplica rango de precio y ordena por precio', () async {
+    await repositorio.insertar(crearArticulo(id: '1', titulo: 'A', precio: 100));
+    await repositorio.insertar(crearArticulo(id: '2', titulo: 'B', precio: 500));
+    await repositorio.insertar(crearArticulo(id: '3', titulo: 'C', precio: 900));
+
+    final PaginaArticulos pagina = await repositorio.buscarPagina(
+      const ConsultaArticulos(
+        precioMinimo: 100,
+        precioMaximo: 500,
+        orden: OrdenArticulos.precioDesc,
+      ),
+    );
+
+    expect(pagina.articulos.map((Articulo a) => a.id), <String>['2', '1']);
+  });
+
+  test('el orden por título se fuerza a precio al usar un rango', () async {
+    await repositorio.insertar(crearArticulo(id: '1', titulo: 'A', precio: 900));
+    await repositorio.insertar(crearArticulo(id: '2', titulo: 'B', precio: 100));
+
+    final PaginaArticulos pagina = await repositorio.buscarPagina(
+      const ConsultaArticulos(precioMaximo: 1000),
+    );
+
+    expect(pagina.articulos.map((Articulo a) => a.id), <String>['2', '1']);
+  });
+
   test('toMap/fromMap conservan todos los campos (ida y vuelta)', () {
     final Articulo original = crearArticulo(
       id: 'z9',
@@ -198,6 +283,7 @@ void main() {
       esFavorito: true,
       imagenUrl: 'https://ejemplo.com/foto.jpg',
       uidAutor: 'uid-autor',
+      estado: EstadoPublicacion.finalizado,
     );
 
     final Articulo copia = Articulo.fromMap(original.toMap());
@@ -212,5 +298,58 @@ void main() {
     expect(copia.esFavorito, original.esFavorito);
     expect(copia.imagenUrl, original.imagenUrl);
     expect(copia.uidAutor, original.uidAutor);
+    expect(copia.estado, EstadoPublicacion.finalizado);
+  });
+
+  test('fromMap acepta artículos antiguos sin estado', () {
+    final Map<String, Object?> antiguo = crearArticulo(id: 'viejo').toMap()
+      ..remove('estado');
+
+    expect(
+      Articulo.fromMap(antiguo).estado,
+      EstadoPublicacion.disponible,
+    );
+  });
+
+  test('buscarPagina filtra por uidAutor', () async {
+    await repositorio.insertar(
+      crearArticulo(id: 'mio', titulo: 'Mío', uidAutor: 'uid-1'),
+    );
+    await repositorio.insertar(
+      crearArticulo(id: 'ajeno', titulo: 'Ajeno', uidAutor: 'uid-2'),
+    );
+
+    final PaginaArticulos pagina = await repositorio.buscarPagina(
+      const ConsultaArticulos(uidAutor: 'uid-1'),
+    );
+
+    expect(pagina.articulos.map((Articulo a) => a.id), <String>['mio']);
+  });
+
+  test('buscarPaginaFavoritos avanza con el cursor y avisa cuando no hay más',
+      () async {
+    for (int i = 1; i <= 3; i++) {
+      await repositorio.insertar(
+        crearArticulo(
+          id: 'f$i',
+          titulo: 'Favorito $i',
+          esFavorito: true,
+        ),
+      );
+    }
+    await repositorio.insertar(crearArticulo(id: 'no', titulo: 'No favorito'));
+
+    final PaginaArticulos primera = await repositorio.buscarPaginaFavoritos(
+      limite: 2,
+    );
+    expect(primera.articulos.map((Articulo a) => a.id), <String>['f1', 'f2']);
+    expect(primera.hayMas, isTrue);
+
+    final PaginaArticulos segunda = await repositorio.buscarPaginaFavoritos(
+      limite: 2,
+      cursor: primera.cursor,
+    );
+    expect(segunda.articulos.map((Articulo a) => a.id), <String>['f3']);
+    expect(segunda.hayMas, isFalse);
   });
 }

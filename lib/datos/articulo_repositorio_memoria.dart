@@ -14,6 +14,8 @@
 
 import '../modelos/articulo.dart';
 import '../modelos/categoria.dart';
+import '../modelos/consulta_articulos.dart';
+import '../modelos/pagina_articulos.dart';
 import 'articulo_repositorio.dart';
 
 /// Repositorio que guarda los artículos en una lista en memoria.
@@ -88,15 +90,89 @@ class ArticuloRepositorioMemoria implements ArticuloRepositorio {
 
   @override
   Future<List<Articulo>> buscar(String texto, {Categoria? categoria}) async {
-    final String textoLimpio = texto.trim().toLowerCase();
-    final Iterable<Articulo> resultado = _articulos.where((Articulo a) {
-      final bool coincideTexto = textoLimpio.isEmpty ||
-          a.titulo.toLowerCase().contains(textoLimpio);
-      final bool coincideCategoria =
-          categoria == null || a.categoria == categoria;
-      return coincideTexto && coincideCategoria;
+    final PaginaArticulos pagina = await buscarPagina(
+      ConsultaArticulos(texto: texto, categoria: categoria, limite: null),
+    );
+    return pagina.articulos;
+  }
+
+  /// Ordena según la consulta, con desempates estables para la paginación.
+  List<Articulo> _ordenadosPor(
+    Iterable<Articulo> articulos,
+    ConsultaArticulos consulta,
+  ) {
+    final List<Articulo> lista = articulos.toList();
+    final OrdenArticulos orden = consulta.ordenEfectivo;
+    lista.sort((Articulo a, Articulo b) {
+      final int principal = switch (orden) {
+        OrdenArticulos.titulo => a.titulo.compareTo(b.titulo),
+        OrdenArticulos.precioAsc => a.precio.compareTo(b.precio),
+        OrdenArticulos.precioDesc => b.precio.compareTo(a.precio),
+      };
+      if (principal != 0) return principal;
+      final int titulo = a.titulo.compareTo(b.titulo);
+      return titulo != 0 ? titulo : a.id.compareTo(b.id);
     });
-    return _ordenados(resultado);
+    return lista;
+  }
+
+  @override
+  Future<PaginaArticulos> buscarPagina(
+    ConsultaArticulos consulta, {
+    Object? cursor,
+  }) async {
+    final String textoLimpio = consulta.texto.trim().toLowerCase();
+    final Iterable<Articulo> filtrados = _articulos.where((Articulo a) {
+      final bool coincideTexto = textoLimpio.isEmpty ||
+          a.titulo.toLowerCase().contains(textoLimpio) ||
+          a.descripcion.toLowerCase().contains(textoLimpio);
+      final bool coincideCategoria =
+          consulta.categoria == null || a.categoria == consulta.categoria;
+      final bool coincidePrecio =
+          (consulta.precioMinimo == null ||
+              a.precio >= consulta.precioMinimo!) &&
+          (consulta.precioMaximo == null ||
+              a.precio <= consulta.precioMaximo!);
+      final bool coincideAutor =
+          consulta.uidAutor == null || a.uidAutor == consulta.uidAutor;
+      return coincideTexto &&
+          coincideCategoria &&
+          coincidePrecio &&
+          coincideAutor;
+    });
+    final List<Articulo> ordenados = _ordenadosPor(filtrados, consulta);
+    final int? limite = consulta.limite;
+    if (limite == null) {
+      return PaginaArticulos(articulos: ordenados);
+    }
+
+    final int desplazamiento =
+        cursor is int && cursor >= 0 ? cursor : 0;
+    final int fin = (desplazamiento + limite).clamp(0, ordenados.length);
+    final int inicio = desplazamiento.clamp(0, fin);
+    final List<Articulo> visibles = ordenados.sublist(inicio, fin);
+    return PaginaArticulos(
+      articulos: visibles,
+      cursor: fin,
+      hayMas: fin < ordenados.length,
+    );
+  }
+
+  @override
+  Future<PaginaArticulos> buscarPaginaFavoritos({
+    required int limite,
+    Object? cursor,
+  }) async {
+    final List<Articulo> favoritos =
+        _ordenados(_articulos.where((Articulo a) => a.esFavorito));
+    final int desplazamiento = cursor is int && cursor >= 0 ? cursor : 0;
+    final int fin = (desplazamiento + limite).clamp(0, favoritos.length);
+    final int inicio = desplazamiento.clamp(0, fin);
+    return PaginaArticulos(
+      articulos: favoritos.sublist(inicio, fin),
+      cursor: fin,
+      hayMas: fin < favoritos.length,
+    );
   }
 
   @override

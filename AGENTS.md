@@ -14,7 +14,7 @@ cada avance.
 ```bash
 flutter pub get   # tras tocar pubspec.yaml
 flutter analyze   # -> No issues found!
-flutter test      # -> All tests passed!  (58 pruebas)
+flutter test      # -> All tests passed!  (73 pruebas)
 ```
 
 No hay CI de pruebas: `analyze` + `test` son la única verificación local.
@@ -51,9 +51,28 @@ Pantallas --context.watch/read--> ArticulosProvider (ChangeNotifier)
 - "Mis artículos" filtra por `uidAutor == provider.uidActual`; al publicar se
   usa `provider.vendedorActual` (displayName real). `main.dart` llama
   `configurarUsuario(...)` al restaurar/iniciar sesión.
+- **Búsqueda avanzada (Avance 14):** la UI solo llama a
+  `provider.actualizarBusqueda/seleccionarCategoria/actualizarFiltros/cargarMas`.
+  El provider envía `ConsultaArticulos` al repositorio y recibe
+  `PaginaArticulos(articulos, cursor, hayMas)`; el cursor es opaco. `texto` se
+  filtra en Dart (título + descripción) porque Firestore no tiene `LIKE`; el
+  orden por título se fuerza a precio cuando hay rango.
+- **Paginación total (Avance 15):** el provider ya no expone `todos` ni llama a
+  `obtenerTodos()`. Inicio, "Mis artículos" y favoritos usan
+  `PaginaArticulos`; `cargarMis/cargarFavoritos` reinician la página,
+  `cargarMasMis/cargarMasFavoritos` siguen el cursor y `refrescarArticulo(id)
+  actualiza el detalle por id. `observarTodos()` sigue vivo como señal de
+  invalidación en tiempo real (deuda conocida: aún lee la colección completa).
+- **Estados de publicación (Avance 16):** `Articulo.estado` usa
+  `EstadoPublicacion.disponible|finalizado` (SQLite v4, valor por defecto
+  `disponible`). La etiqueta depende del tipo: `Disponible`, `Vendido`,
+  `Intercambiado` o `Entregado`. `provider.cambiarEstado(id, estado)` es la
+  única vía de cambio; "Mis artículos" tiene la acción y el detalle desactiva
+  "Contactar al vendedor" cuando está finalizado. No hay caducidad ni filtro
+  por estado en Inicio.
 - Las fotos viven en **Supabase Storage** (`AlmacenamientoImagenes`, API REST
   con `http`) y la URL en `Articulo.imagenUrl` (Firestore y SQLite, esquema
-  v3; `uidAutor` también desde v3). Las credenciales van en `lib/config_supabase.dart` (o `--dart-define`);
+  v4; `uidAutor` desde v3). Las credenciales van en `lib/config_supabase.dart` (o `--dart-define`);
   el bucket público `articulos` y sus políticas se configuran según
   `SUPABASE_SETUP.md`. Firebase Storage no se usa (Blaze no se pudo activar).
   El build de release necesita el permiso `INTERNET` en
@@ -103,7 +122,9 @@ Pantallas --context.watch/read--> ArticulosProvider (ChangeNotifier)
 
 - Firestore es la fuente real (`unicambio-2f543`). Las reglas viven en
   `firestore.rules` (desplegar con `firebase deploy --only firestore:rules` o
-  pegarlas en la consola). Sin sesión, leer/escribir falla por diseño.
+  pegarlas en la consola). Sin sesión, leer/escribir falla por diseño. Los
+  índices compuestos de filtros viven en `firestore.indexes.json`; desplegar con
+  `firebase deploy --only firestore:indexes`.
 - `sqflite` solo corre en Android/iOS y ya no se usa en la app (solo en sus
   pruebas, con `sqflite_common_ffi`). Para UI rápida sigue sirviendo
   `flutter run -d chrome`; para datos reales, emulador Android.
@@ -131,4 +152,5 @@ Pantallas --context.watch/read--> ArticulosProvider (ChangeNotifier)
   `scripts/configure_ios_mlkit.rb` registra `GoogleService-Info.plist` con
   `xcodeproj`.
 - Deuda técnica consciente: la búsqueda en Firestore es en memoria (no hay
-  `LIKE`); resolver en un avance futuro (`PROGRESO.md` §11).
+  `LIKE`); resolver en un avance futuro (`PROGRESO.md` §11). La paginación ya es
+  real, pero `todos` sigue leyendo la colección completa.

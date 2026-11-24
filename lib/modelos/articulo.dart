@@ -62,6 +62,26 @@ extension TipoPublicacionUI on TipoPublicacion {
   }
 }
 
+/// Estado de una publicación mientras sigue (o deja) de estar disponible.
+enum EstadoPublicacion { disponible, finalizado }
+
+/// Utilidades visuales para [EstadoPublicacion].
+extension EstadoPublicacionUI on EstadoPublicacion {
+  /// Etiqueta corta y genérica del estado.
+  String get etiqueta =>
+      this == EstadoPublicacion.disponible ? 'Disponible' : 'Finalizado';
+
+  /// Etiqueta acorde al tipo de publicación (vendido, entregado, intercambiado).
+  String etiquetaPara(TipoPublicacion tipo) {
+    if (this == EstadoPublicacion.disponible) return etiqueta;
+    return switch (tipo) {
+      TipoPublicacion.venta => 'Vendido',
+      TipoPublicacion.intercambio => 'Intercambiado',
+      TipoPublicacion.regalo => 'Entregado',
+    };
+  }
+}
+
 /// Representa un artículo publicado por un estudiante.
 ///
 /// La clase es "inmutable" (`final` en todos sus campos) porque en este avance
@@ -97,6 +117,9 @@ class Articulo {
   /// `uid` de Firebase del usuario que publicó el artículo (null si es local).
   final String? uidAutor;
 
+  /// Estado actual de la publicación (por defecto, disponible).
+  final EstadoPublicacion estado;
+
   /// Constructor constante: permite crear artículos de ejemplo sin costo extra.
   const Articulo({
     required this.id,
@@ -109,6 +132,7 @@ class Articulo {
     this.esFavorito = false,
     this.imagenUrl,
     this.uidAutor,
+    this.estado = EstadoPublicacion.disponible,
   });
 
   /// Crea una copia del artículo cambiando solo los campos que se indiquen.
@@ -127,6 +151,7 @@ class Articulo {
     bool? esFavorito,
     String? imagenUrl,
     String? uidAutor,
+    EstadoPublicacion? estado,
     bool borrarImagen = false,
   }) {
     return Articulo(
@@ -140,6 +165,7 @@ class Articulo {
       esFavorito: esFavorito ?? this.esFavorito,
       imagenUrl: borrarImagen ? null : imagenUrl ?? this.imagenUrl,
       uidAutor: uidAutor ?? this.uidAutor,
+      estado: estado ?? this.estado,
     );
   }
 
@@ -160,6 +186,7 @@ class Articulo {
       'esFavorito': esFavorito ? 1 : 0,
       'imagenUrl': imagenUrl,
       'uidAutor': uidAutor,
+      'estado': estado.name,
     };
   }
 
@@ -180,6 +207,11 @@ class Articulo {
       esFavorito: (map['esFavorito'] as int) == 1,
       imagenUrl: map['imagenUrl'] as String?,
       uidAutor: map['uidAutor'] as String?,
+      estado: EstadoPublicacion.values.firstWhere(
+        (EstadoPublicacion valor) =>
+            valor.name == (map['estado'] as String? ?? 'disponible'),
+        orElse: () => EstadoPublicacion.disponible,
+      ),
     );
   }
 

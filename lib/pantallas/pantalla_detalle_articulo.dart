@@ -16,17 +16,33 @@ import '../modelos/articulo.dart';
 import '../modelos/categoria.dart';
 
 /// Pantalla de detalle. Recibe el [articulo] que se quiere mostrar.
-class PantallaDetalleArticulo extends StatelessWidget {
+class PantallaDetalleArticulo extends StatefulWidget {
   /// Artículo que se muestra en el detalle.
   final Articulo articulo;
 
   const PantallaDetalleArticulo({super.key, required this.articulo});
 
   @override
+  State<PantallaDetalleArticulo> createState() =>
+      _PantallaDetalleArticuloState();
+}
+
+class _PantallaDetalleArticuloState extends State<PantallaDetalleArticulo> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<ArticulosProvider>().refrescarArticulo(widget.articulo.id);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final ThemeData tema = Theme.of(context);
-    // Versión fresca del artículo según el provider (por si cambió el favorito).
-    final Articulo actual = context.watch<ArticulosProvider>().articuloPorId(articulo.id) ?? articulo;
+    final Articulo actual =
+        context.watch<ArticulosProvider>().articuloPorId(widget.articulo.id) ??
+            widget.articulo;
 
     return Scaffold(
       appBar: AppBar(
@@ -35,7 +51,7 @@ class PantallaDetalleArticulo extends StatelessWidget {
           IconButton(
             onPressed: () => context
                 .read<ArticulosProvider>()
-                .alternarFavorito(articulo.id),
+                .alternarFavorito(actual.id),
             icon: Icon(
               actual.esFavorito ? Icons.favorite : Icons.favorite_border,
               color: actual.esFavorito ? const Color(0xFFE53935) : null,
@@ -69,6 +85,16 @@ class PantallaDetalleArticulo extends StatelessWidget {
                         icono: actual.categoria.icono,
                         texto: actual.categoria.etiqueta,
                         color: tema.colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      _Pastilla(
+                        icono: actual.estado == EstadoPublicacion.finalizado
+                            ? Icons.lock_outline
+                            : Icons.check_circle_outline,
+                        texto: actual.estado.etiquetaPara(actual.tipo),
+                        color: actual.estado == EstadoPublicacion.finalizado
+                            ? Colors.grey
+                            : tema.colorScheme.tertiary,
                       ),
                     ],
                   ),
@@ -130,15 +156,22 @@ class PantallaDetalleArticulo extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
           child: FilledButton.icon(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('El chat con el vendedor llegará pronto.'),
-                ),
-              );
-            },
+            key: const Key('contactar-vendedor'),
+            onPressed: actual.estado == EstadoPublicacion.finalizado
+                ? null
+                : () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('El chat con el vendedor llegará pronto.'),
+                      ),
+                    );
+                  },
             icon: const Icon(Icons.chat_bubble_outline),
-            label: const Text('Contactar al vendedor'),
+            label: Text(
+              actual.estado == EstadoPublicacion.finalizado
+                  ? 'Publicación finalizada'
+                  : 'Contactar al vendedor',
+            ),
           ),
         ),
       ),

@@ -5,7 +5,7 @@
 //              pantallas cuando algo cambia.
 //
 // ¿Por qué existe? Porque varias pantallas necesitan los mismos datos:
-//   - Inicio muestra la lista (con búsqueda y filtro).
+//   - Inicio muestra la lista paginada (con búsqueda y filtros).
 //   - Favoritos muestra los marcados como favoritos.
 //   - Mis artículos muestra los del usuario.
 // Si cada pantalla leyera por su cuenta, no se sincronizarían. Con este estado
@@ -24,11 +24,16 @@ import 'package:firebase_core/firebase_core.dart' show FirebaseException;
 import '../datos/articulo_repositorio.dart';
 import '../modelos/articulo.dart';
 import '../modelos/categoria.dart';
+import '../modelos/consulta_articulos.dart';
+import '../modelos/pagina_articulos.dart';
 
 /// Estado global encargado de los artículos de UniCambio.
 class ArticulosProvider extends ChangeNotifier {
   /// Repositorio de datos (inyectado para poder usar la BD real o una de prueba).
   final ArticuloRepositorio _repositorio;
+
+  /// Cantidad de artículos que se piden por página.
+  static const int _tamanoPagina = 12;
 
   ArticulosProvider(this._repositorio);
 
@@ -36,14 +41,17 @@ class ArticulosProvider extends ChangeNotifier {
   // Estado interno (privado). Nadie lo modifica desde afuera.
   // ---------------------------------------------------------------------------
 
-  /// Lista completa de artículos cargados (sin aplicar búsqueda ni filtro).
-  List<Articulo> _todos = <Articulo>[];
-
-  /// Lista de artículos que se está mostrando en Inicio (según búsqueda/filtro).
+  /// Página de artículos que se está mostrando en Inicio.
   List<Articulo> _articulos = <Articulo>[];
 
-  /// Lista de artículos marcados como favoritos.
+  /// Página de artículos publicados por la cuenta actual.
+  List<Articulo> _mis = <Articulo>[];
+
+  /// Página de artículos marcados como favoritos.
   List<Articulo> _favoritos = <Articulo>[];
+
+  /// Detalles consultados por id (evita volver a leer el mismo documento).
+  final Map<String, Articulo> _cacheDetalle = <String, Articulo>{};
 
   /// `true` mientras se está leyendo/escribiendo en la base de datos.
   bool _cargando = false;
@@ -56,6 +64,41 @@ class ArticulosProvider extends ChangeNotifier {
 
   /// Categoría seleccionada en los filtros (null = "Todos").
   Categoria? _categoriaSeleccionada;
+
+  /// Precio mínimo del filtro (null = sin límite inferior).
+  double? _precioMinimo;
+
+  /// Precio máximo del filtro (null = sin límite superior).
+  double? _precioMaximo;
+
+  /// Orden elegido para los resultados.
+  OrdenArticulos _orden = OrdenArticulos.titulo;
+
+  /// Marcador opaco devuelto por el repositorio para pedir la siguiente página.
+  Object? _cursor;
+
+  /// Cursor de "Mis artículos" y de Favoritos (listas independientes).
+  Object? _cursorMis;
+  Object? _cursorFavoritos;
+
+  /// `true` si el repositorio indicó que quedan más artículos en cada lista.
+  bool _hayMas = false;
+  bool _hayMasMis = false;
+  bool _hayMasFavoritos = false;
+
+  /// `true` mientras se pide una página adicional en cada lista.
+  bool _cargandoMas = false;
+  bool _cargandoMasMis = false;
+  bool _cargandoMasFavoritos = false;
+
+  /// `true` mientras se carga la primera página de cada lista.
+  bool _cargandoMis = false;
+  bool _cargandoFavoritos = false;
+
+  /// Contadores para descartar respuestas viejas de cada lista.
+  int _tokenPagina = 0;
+  int _tokenMis = 0;
+  int _tokenFavoritos = 0;
 
   /// Escucha de cambios en tiempo real (solo si el repositorio la soporta).
   StreamSubscription<List<Articulo>>? _suscripcion;
@@ -73,18 +116,27 @@ class ArticulosProvider extends ChangeNotifier {
   // Getters públicos: lo único que las pantallas pueden leer.
   // ---------------------------------------------------------------------------
 
-  /// Todos los artículos cargados, sin filtrar (los que hay en la base).
-  List<Articulo> get todos => UnmodifiableListView<Articulo>(_todos);
-
-  /// Artículos a mostrar en Inicio (filtrados por búsqueda y categoría).
+  /// Artículos a mostrar en Inicio (página filtrada y ordenada).
   /// Se devuelve "no modificable" para que la UI no altere el estado por error.
   List<Articulo> get articulos => UnmodifiableListView<Articulo>(_articulos);
 
-  /// Artículos favoritos.
+  /// Página de artículos publicados por la cuenta actual.
+  List<Articulo> get mios => UnmodifiableListView<Articulo>(_mis);
+
+  /// Página de artículos favoritos.
   List<Articulo> get favoritos => UnmodifiableListView<Articulo>(_favoritos);
 
-  /// Indica si hay una operación en curso (para mostrar un spinner).
+  /// Indica si hay una operación principal en curso (spinner de pantalla).
   bool get cargando => _cargando;
+
+  /// Indica si se está cargando una página adicional en cada lista.
+  bool get cargandoMas => _cargandoMas;
+  bool get cargandoMasMis => _cargandoMasMis;
+  bool get cargandoMasFavoritos => _cargandoMasFavoritos;
+
+  /// Indica si se está cargando la primera página de cada lista.
+  bool get cargandoMis => _cargandoMis;
+  bool get cargandoFavoritos => _cargandoFavoritos;
 
   /// Error actual, si hubo alguno.
   String? get error => _error;
@@ -95,28 +147,41 @@ class ArticulosProvider extends ChangeNotifier {
   /// Categoría seleccionada en los filtros.
   Categoria? get categoriaSeleccionada => _categoriaSeleccionada;
 
+  /// Precio mínimo del filtro.
+  double? get precioMinimo => _precioMinimo;
+
+  /// Precio máximo del filtro.
+  double? get precioMaximo => _precioMaximo;
+
+  /// Orden elegido para los resultados.
+  OrdenArticulos get orden => _orden;
+
+  /// `true` si todavía quedan páginas por cargar en cada lista.
+  bool get hayMas => _hayMas;
+  bool get hayMasMis => _hayMasMis;
+  bool get hayMasFavoritos => _hayMasFavoritos;
+
   /// `uid` del usuario actual (null si no hay sesión).
   String? get uidActual => _uidActual;
 
   /// Nombre visible del usuario actual (para el saludo y las publicaciones).
   String get vendedorActual => _vendedorActual;
 
-  /// Artículos publicados por la cuenta actual (vacío si no hay sesión).
-  List<Articulo> get mios {
-    final String? uid = _uidActual;
-    if (uid == null) return UnmodifiableListView<Articulo>(<Articulo>[]);
-    return UnmodifiableListView<Articulo>(
-      _todos.where((Articulo a) => a.uidAutor == uid).toList(),
-    );
-  }
-
   /// `true` si la lista visible está vacía (útil para el estado vacío).
   bool get listaVacia => _articulos.isEmpty;
 
-  /// Devuelve el artículo con ese id, o `null` si no existe.
+  /// Devuelve el artículo con ese id desde la caché o las listas cargadas.
   Articulo? articuloPorId(String id) {
-    for (final Articulo articulo in _todos) {
-      if (articulo.id == id) return articulo;
+    final Articulo? enCache = _cacheDetalle[id];
+    if (enCache != null) return enCache;
+    for (final List<Articulo> lista in <List<Articulo>>[
+      _articulos,
+      _mis,
+      _favoritos,
+    ]) {
+      for (final Articulo articulo in lista) {
+        if (articulo.id == id) return articulo;
+      }
     }
     return null;
   }
@@ -125,10 +190,11 @@ class ArticulosProvider extends ChangeNotifier {
   // Carga inicial
   // ---------------------------------------------------------------------------
 
-  /// Carga los artículos y los favoritos desde la base de datos.
-  /// Se llama una vez al abrir la app (en `main.dart`) y al iniciar sesión.
+  /// Carga solo la primera página de Inicio.
+  /// Mis artículos y Favoritos se piden bajo demanda desde sus pantallas.
   Future<void> iniciar() async {
-    await _ejecutar(_refrescar);
+    _reiniciarPagina();
+    await _ejecutar(_recargarPagina);
     _escucharCambios();
   }
 
@@ -141,29 +207,224 @@ class ArticulosProvider extends ChangeNotifier {
     String? nombre,
     String? correo,
   }) {
+    final bool cambioDeCuenta = uid != _uidActual;
     _uidActual = uid;
     final String limpio = (nombre ?? '').trim();
     _vendedorActual = limpio.isNotEmpty
         ? limpio
         : (correo ?? '').split('@').first.trim();
     if (_vendedorActual.isEmpty) _vendedorActual = vendedorPropio;
+
+    if (cambioDeCuenta) {
+      _reiniciarMis();
+      _reiniciarFavoritos();
+      unawaited(_recargarMis());
+      unawaited(_recargarFavoritos());
+    }
     notifyListeners();
   }
 
   // ---------------------------------------------------------------------------
-  // Búsqueda y filtros
+  // Búsqueda, filtros y paginación
   // ---------------------------------------------------------------------------
 
-  /// Actualiza el texto de búsqueda y recarga la lista.
+  /// Actualiza el texto de búsqueda y recarga la primera página.
   Future<void> actualizarBusqueda(String texto) {
     _textoBusqueda = texto;
-    return _ejecutar(_refrescar);
+    _reiniciarPagina();
+    return _ejecutar(_recargarPagina);
   }
 
-  /// Cambia la categoría seleccionada (null = "Todos") y recarga la lista.
+  /// Cambia la categoría seleccionada (null = "Todos") y recarga la página.
   Future<void> seleccionarCategoria(Categoria? categoria) {
     _categoriaSeleccionada = categoria;
-    return _ejecutar(_refrescar);
+    _reiniciarPagina();
+    return _ejecutar(_recargarPagina);
+  }
+
+  /// Aplica el rango de precio y el orden elegidos desde el panel de filtros.
+  Future<void> actualizarFiltros({
+    double? precioMinimo,
+    double? precioMaximo,
+    OrdenArticulos? orden,
+  }) {
+    _precioMinimo = precioMinimo;
+    _precioMaximo = precioMaximo;
+    if (orden != null) _orden = orden;
+    _reiniciarPagina();
+    return _ejecutar(_recargarPagina);
+  }
+
+  /// Quita todos los filtros (incluido texto y categoría) y recarga la página.
+  Future<void> limpiarFiltros() {
+    _textoBusqueda = '';
+    _categoriaSeleccionada = null;
+    _precioMinimo = null;
+    _precioMaximo = null;
+    _orden = OrdenArticulos.titulo;
+    _reiniciarPagina();
+    return _ejecutar(_recargarPagina);
+  }
+
+  /// Pide la siguiente página con el cursor devuelto por el repositorio.
+  Future<void> cargarMas() async {
+    if (!_hayMas || _cursor == null || _cargandoMas) return;
+
+    final Object? cursor = _cursor;
+    final int token = ++_tokenPagina;
+    _cargandoMas = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final PaginaArticulos pagina = await _repositorio.buscarPagina(
+        _consultaActual(),
+        cursor: cursor,
+      );
+      if (token != _tokenPagina) return;
+      _articulos = List<Articulo>.from(_articulos)..addAll(pagina.articulos);
+      _cursor = pagina.cursor;
+      _hayMas = pagina.hayMas;
+    } catch (e) {
+      if (token == _tokenPagina) _error = _mensajeDeError(e);
+    } finally {
+      if (token == _tokenPagina) {
+        _cargandoMas = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  /// Carga la primera página de "Mis artículos" (vacía sin sesión).
+  Future<void> cargarMis() async {
+    final String? uid = _uidActual;
+    if (uid == null) {
+      _reiniciarMis();
+      notifyListeners();
+      return;
+    }
+
+    final int token = ++_tokenMis;
+    _cargandoMis = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final PaginaArticulos pagina = await _repositorio.buscarPagina(
+        ConsultaArticulos(uidAutor: uid, limite: _tamanoPagina),
+      );
+      if (token != _tokenMis || _destruido) return;
+      _mis = pagina.articulos;
+      _cursorMis = pagina.cursor;
+      _hayMasMis = pagina.hayMas;
+    } catch (e) {
+      if (token == _tokenMis && !_destruido) _error = _mensajeDeError(e);
+    } finally {
+      if (token == _tokenMis && !_destruido) {
+        _cargandoMis = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  /// Anexa la siguiente página de "Mis artículos".
+  Future<void> cargarMasMis() async {
+    if (!_hayMasMis || _cursorMis == null || _cargandoMasMis) return;
+
+    final Object? cursor = _cursorMis;
+    final int token = ++_tokenMis;
+    _cargandoMasMis = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final PaginaArticulos pagina = await _repositorio.buscarPagina(
+        ConsultaArticulos(uidAutor: _uidActual, limite: _tamanoPagina),
+        cursor: cursor,
+      );
+      if (token != _tokenMis || _destruido) return;
+      _mis = List<Articulo>.from(_mis)..addAll(pagina.articulos);
+      _cursorMis = pagina.cursor;
+      _hayMasMis = pagina.hayMas;
+    } catch (e) {
+      if (token == _tokenMis && !_destruido) _error = _mensajeDeError(e);
+    } finally {
+      if (token == _tokenMis && !_destruido) {
+        _cargandoMasMis = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  /// Carga la primera página de favoritos.
+  Future<void> cargarFavoritos() async {
+    final int token = ++_tokenFavoritos;
+    _cargandoFavoritos = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final PaginaArticulos pagina =
+          await _repositorio.buscarPaginaFavoritos(limite: _tamanoPagina);
+      if (token != _tokenFavoritos || _destruido) return;
+      _favoritos = pagina.articulos;
+      _cursorFavoritos = pagina.cursor;
+      _hayMasFavoritos = pagina.hayMas;
+    } catch (e) {
+      if (token == _tokenFavoritos && !_destruido) {
+        _error = _mensajeDeError(e);
+      }
+    } finally {
+      if (token == _tokenFavoritos && !_destruido) {
+        _cargandoFavoritos = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  /// Anexa la siguiente página de favoritos.
+  Future<void> cargarMasFavoritos() async {
+    if (!_hayMasFavoritos || _cursorFavoritos == null || _cargandoMasFavoritos) {
+      return;
+    }
+
+    final Object? cursor = _cursorFavoritos;
+    final int token = ++_tokenFavoritos;
+    _cargandoMasFavoritos = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final PaginaArticulos pagina = await _repositorio.buscarPaginaFavoritos(
+        limite: _tamanoPagina,
+        cursor: cursor,
+      );
+      if (token != _tokenFavoritos || _destruido) return;
+      _favoritos = List<Articulo>.from(_favoritos)..addAll(pagina.articulos);
+      _cursorFavoritos = pagina.cursor;
+      _hayMasFavoritos = pagina.hayMas;
+    } catch (e) {
+      if (token == _tokenFavoritos && !_destruido) {
+        _error = _mensajeDeError(e);
+      }
+    } finally {
+      if (token == _tokenFavoritos && !_destruido) {
+        _cargandoMasFavoritos = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  /// Lee un artículo por id y actualiza la caché del detalle.
+  Future<void> refrescarArticulo(String id) async {
+    try {
+      final Articulo? actual = await _repositorio.obtenerPorId(id);
+      if (actual == null || _destruido) return;
+      _cacheDetalle[id] = actual;
+      _reemplazarEnListas(actual);
+      notifyListeners();
+    } catch (e) {
+      if (!_destruido) {
+        _error = _mensajeDeError(e);
+        notifyListeners();
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -174,7 +435,8 @@ class ArticulosProvider extends ChangeNotifier {
   Future<void> insertar(Articulo articulo) {
     return _ejecutar(() async {
       await _repositorio.insertar(articulo);
-      await _refrescar();
+      await _recargarPagina();
+      await _recargarMis();
     });
   }
 
@@ -182,7 +444,25 @@ class ArticulosProvider extends ChangeNotifier {
   Future<void> actualizar(Articulo articulo) {
     return _ejecutar(() async {
       await _repositorio.actualizar(articulo);
-      await _refrescar();
+      _cacheDetalle[articulo.id] = articulo;
+      _reemplazarEnListas(articulo);
+      await _recargarPagina();
+      await _recargarMis();
+      await _recargarFavoritos();
+    });
+  }
+
+  /// Marca una publicación como disponible o finalizada.
+  Future<void> cambiarEstado(String id, EstadoPublicacion estado) {
+    return _ejecutar(() async {
+      final Articulo? actual = await _repositorio.obtenerPorId(id);
+      if (actual == null) return;
+      final Articulo actualizado = actual.copyWith(estado: estado);
+      await _repositorio.actualizar(actualizado);
+      _cacheDetalle[id] = actualizado;
+      _reemplazarEnListas(actualizado);
+      await _recargarPagina();
+      await _recargarMis();
     });
   }
 
@@ -190,7 +470,13 @@ class ArticulosProvider extends ChangeNotifier {
   Future<void> eliminar(String id) {
     return _ejecutar(() async {
       await _repositorio.eliminar(id);
-      await _refrescar();
+      _cacheDetalle.remove(id);
+      _articulos = _sinArticulo(_articulos, id);
+      _mis = _sinArticulo(_mis, id);
+      _favoritos = _sinArticulo(_favoritos, id);
+      await _recargarPagina();
+      await _recargarMis();
+      await _recargarFavoritos();
     });
   }
 
@@ -198,7 +484,13 @@ class ArticulosProvider extends ChangeNotifier {
   Future<void> alternarFavorito(String id) {
     return _ejecutar(() async {
       await _repositorio.alternarFavorito(id);
-      await _refrescar();
+      final Articulo? actual = await _repositorio.obtenerPorId(id);
+      if (actual != null) {
+        _cacheDetalle[id] = actual;
+        _reemplazarEnListas(actual);
+      }
+      await _recargarPagina();
+      await _recargarFavoritos();
     });
   }
 
@@ -206,15 +498,101 @@ class ArticulosProvider extends ChangeNotifier {
   // Métodos internos
   // ---------------------------------------------------------------------------
 
-  /// Recarga las listas desde el repositorio, aplicando la búsqueda y el filtro
-  /// actuales. No avisa a la UI (eso lo hace [_ejecutar]).
-  Future<void> _refrescar() async {
-    _todos = await _repositorio.obtenerTodos();
-    _articulos = await _repositorio.buscar(
-      _textoBusqueda,
-      categoria: _categoriaSeleccionada,
+  /// Consulta que representa el estado actual de los filtros.
+  ConsultaArticulos _consultaActual() => ConsultaArticulos(
+        texto: _textoBusqueda,
+        categoria: _categoriaSeleccionada,
+        precioMinimo: _precioMinimo,
+        precioMaximo: _precioMaximo,
+        orden: _orden,
+        limite: _tamanoPagina,
+      );
+
+  /// Invalida la página actual y cualquier respuesta que estuviera en camino.
+  void _reiniciarPagina() {
+    _tokenPagina++;
+    _articulos = <Articulo>[];
+    _cursor = null;
+    _hayMas = false;
+  }
+
+  /// Invalida la página de "Mis artículos".
+  void _reiniciarMis() {
+    _tokenMis++;
+    _mis = <Articulo>[];
+    _cursorMis = null;
+    _hayMasMis = false;
+    _cargandoMis = false;
+    _cargandoMasMis = false;
+  }
+
+  /// Invalida la página de favoritos.
+  void _reiniciarFavoritos() {
+    _tokenFavoritos++;
+    _favoritos = <Articulo>[];
+    _cursorFavoritos = null;
+    _hayMasFavoritos = false;
+    _cargandoFavoritos = false;
+    _cargandoMasFavoritos = false;
+  }
+
+  /// Recarga la primera página de "Mis artículos"; no avisa a la UI.
+  Future<void> _recargarMis() async {
+    final String? uid = _uidActual;
+    if (uid == null) {
+      _reiniciarMis();
+      return;
+    }
+    final int token = ++_tokenMis;
+    final PaginaArticulos pagina = await _repositorio.buscarPagina(
+      ConsultaArticulos(uidAutor: uid, limite: _tamanoPagina),
     );
-    _favoritos = await _repositorio.obtenerFavoritos();
+    if (token != _tokenMis) return;
+    _mis = pagina.articulos;
+    _cursorMis = pagina.cursor;
+    _hayMasMis = pagina.hayMas;
+  }
+
+  /// Recarga la primera página de favoritos; no avisa a la UI.
+  Future<void> _recargarFavoritos() async {
+    final int token = ++_tokenFavoritos;
+    final PaginaArticulos pagina =
+        await _repositorio.buscarPaginaFavoritos(limite: _tamanoPagina);
+    if (token != _tokenFavoritos) return;
+    _favoritos = pagina.articulos;
+    _cursorFavoritos = pagina.cursor;
+    _hayMasFavoritos = pagina.hayMas;
+  }
+
+  /// Reemplaza un artículo actualizado en todas las listas cargadas.
+  void _reemplazarEnListas(Articulo articulo) {
+    List<Articulo> reemplazar(List<Articulo> lista) => [
+          for (final Articulo actual in lista)
+            actual.id == articulo.id ? articulo : actual,
+        ];
+    _articulos = reemplazar(_articulos);
+    _mis = reemplazar(_mis);
+    if (articulo.esFavorito) {
+      _favoritos = reemplazar(_favoritos);
+    } else {
+      _favoritos = _sinArticulo(_favoritos, articulo.id);
+    }
+  }
+
+  /// Quita un artículo de una lista por id.
+  List<Articulo> _sinArticulo(List<Articulo> lista, String id) =>
+      lista.where((Articulo articulo) => articulo.id != id).toList();
+
+  /// Recarga solo la primera página visible; no avisa a la UI.
+  Future<void> _recargarPagina() async {
+    final int token = ++_tokenPagina;
+    final PaginaArticulos pagina = await _repositorio.buscarPagina(
+      _consultaActual(),
+    );
+    if (token != _tokenPagina) return;
+    _articulos = pagina.articulos;
+    _cursor = pagina.cursor;
+    _hayMas = pagina.hayMas;
   }
 
   /// Se suscribe a los cambios de la nube (si el repositorio los soporta) para
@@ -223,12 +601,13 @@ class ArticulosProvider extends ChangeNotifier {
     if (!_repositorio.enTiempoReal) return;
     _suscripcion?.cancel();
     _suscripcion = _repositorio.observarTodos().listen(
-      (List<Articulo> todos) {
-        _todos = todos;
-        _articulos = _filtrarEnMemoria(todos);
-        _favoritos = todos.where((Articulo a) => a.esFavorito).toList();
+      (_) {
         _error = null;
-        if (!_destruido) notifyListeners();
+        if (_destruido) return;
+        notifyListeners();
+        unawaited(_refrescarPaginaEnVivo());
+        unawaited(cargarMis());
+        unawaited(cargarFavoritos());
       },
       onError: (Object error) {
         _error = _mensajeDeError(error);
@@ -237,21 +616,32 @@ class ArticulosProvider extends ChangeNotifier {
     );
   }
 
-  /// Aplica la búsqueda y la categoría actuales a una lista ya cargada.
-  List<Articulo> _filtrarEnMemoria(List<Articulo> todos) {
-    final String consulta = _textoBusqueda.trim().toLowerCase();
-    return todos.where((Articulo articulo) {
-      final bool coincideTexto = consulta.isEmpty ||
-          articulo.titulo.toLowerCase().contains(consulta);
-      final bool coincideCategoria = _categoriaSeleccionada == null ||
-          articulo.categoria == _categoriaSeleccionada;
-      return coincideTexto && coincideCategoria;
-    }).toList();
+  /// Refresca la página visible tras un cambio en tiempo real.
+  Future<void> _refrescarPaginaEnVivo() async {
+    final int token = ++_tokenPagina;
+    try {
+      final PaginaArticulos pagina = await _repositorio.buscarPagina(
+        _consultaActual(),
+      );
+      if (token != _tokenPagina || _destruido) return;
+      _articulos = pagina.articulos;
+      _cursor = pagina.cursor;
+      _hayMas = pagina.hayMas;
+      notifyListeners();
+    } catch (e) {
+      if (token == _tokenPagina && !_destruido) {
+        _error = _mensajeDeError(e);
+        notifyListeners();
+      }
+    }
   }
 
   @override
   void dispose() {
     _destruido = true;
+    _tokenPagina++;
+    _tokenMis++;
+    _tokenFavoritos++;
     _suscripcion?.cancel();
     super.dispose();
   }

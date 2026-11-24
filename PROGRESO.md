@@ -3,9 +3,8 @@
 > Documento de contexto y bitácora. Léelo completo al retomar el trabajo para
 > no perder el hilo. Actualízalo al cerrar cada avance.
 
-Última actualización: cierre del **Avance 13 — cierre iOS-ready** (proxy, LLM y
-ajustes de build en un solo commit). Firebase/Google/ML Kit en iOS ya fueron
-validados en el iPhone.
+Última actualización: cierre del **Avance 16 — estados de publicación**.
+Firebase/Google/ML Kit en iOS ya fueron validados en el iPhone.
 
 ---
 
@@ -38,6 +37,9 @@ validados en el iPhone.
 | 11 — Build iOS | Scaffold iOS, Firebase/Google, ML Kit y Codemagic | ✅ Hecho (IPA validado en iPhone) |
 | 12 — Sugerencias LLM (proxy) | Worker REST Gemini + cliente Flutter | ✅ Hecho (58 pruebas) |
 | 13 — Cierre iOS-ready | `.gitignore`, Gradle/AGP y docs del build | ✅ Hecho |
+| 14 — Búsqueda avanzada | Filtros, orden, cursor y panel en Inicio | ✅ Hecho (67 pruebas) |
+| 15 — Paginación total | Sin `todos`: Inicio, Mis artículos y favoritos por cursor | ✅ Hecho (71 pruebas) |
+| 16 — Estados de publicación | `disponible`/`finalizado`, etiquetas y acciones | ✅ Hecho (73 pruebas) |
 
 > **Incidente del Avance 6**: al implementar la autenticación se reescribieron
 > `main.dart` y las pantallas usando datos de ejemplo estáticos
@@ -50,7 +52,7 @@ Verificación más reciente:
 
 ```bash
 flutter analyze   # -> No issues found!
-flutter test      # -> All tests passed!  (58 pruebas)
+flutter test      # -> All tests passed!  (73 pruebas)
 ```
 
 ---
@@ -148,15 +150,16 @@ Proyecto_Unicambio/
 │       ├── pantalla_autenticacion.dart    # Inicio, registro, reset y Google (Firebase)
 │       ├── pantalla_inicio.dart           # Inicio: buscador + chips + cuadrícula + estados
 │       ├── pantalla_favoritos.dart        # Favoritos (desde provider)
-│       ├── pantalla_mis_articulos.dart    # Mis artículos: editar/eliminar con confirmación
-│       ├── pantalla_detalle_articulo.dart # Detalle (favorito conectado)
+│       ├── pantalla_mis_articulos.dart    # Mis artículos: editar/estado/eliminar
+│       ├── pantalla_detalle_articulo.dart # Detalle (favorito y estado conectados)
 │       ├── pantalla_perfil.dart           # Perfil: nombre/foto editable y cerrar sesión
 │       └── pantalla_publicar.dart         # Formulario crear/editar con foto (galería/cámara)
 └── test/
     ├── widget_test.dart                   # 2 pruebas de humo (UI con provider en memoria)
-    ├── articulos_provider_test.dart       # 12 pruebas del estado global
+    ├── articulos_provider_test.dart       # 17 pruebas del estado global
     ├── almacenamiento_imagenes_test.dart  # 5 pruebas de subida/borrado (MockClient)
-    ├── articulo_repositorio_test.dart     # 11 pruebas de SQLite (con ffi)
+    ├── articulo_repositorio_test.dart     # 18 pruebas de SQLite (con ffi)
+    ├── panel_filtros_test.dart            # 3 pruebas del panel de búsqueda avanzada
     ├── sugeridor_publicacion_test.dart    # 9 pruebas de etiquetas/OCR
     ├── generador_descripcion_test.dart    # 5 pruebas de plantillas
     └── panel_sugerencias_test.dart        # 5 pruebas de widgets del panel
@@ -180,15 +183,19 @@ Proyecto_Unicambio/
 | `esFavorito` | `bool` | |
 | `imagenUrl` | `String?` | URL pública en Supabase Storage; null si no tiene foto |
 | `uidAutor` | `String?` | `uid` de Firebase del autor; null en datos locales |
+| `estado` | `EstadoPublicacion` | `disponible` (default) o `finalizado` |
 
 - `TipoPublicacion`: `venta`, `intercambio`, `regalo` (con etiqueta/icono/color).
+- `EstadoPublicacionUI.etiquetaPara(tipo)`: "Disponible" o, si finalizado,
+  "Vendido"/"Intercambiado"/"Entregado" según el tipo.
 - `Categoria`: `libros`, `apuntes`, `tecnologia`, `ropa`, `hogar`, `deportes`, `otros`.
 - `precioTexto`: regalo → "Gratis"; 0 → "A convenir"; resto → "$ N".
 - Serialización: enums como `.name`; `esFavorito` como 0/1 (SQLite no tiene bool);
-  `imagenUrl` y `uidAutor` son opcionales (null si no aplican).
+  `imagenUrl` y `uidAutor` son opcionales (null si no aplican). Los documentos
+  antiguos sin `estado` se leen como `disponible`.
 
-**Tabla `articulos`** (creada en `base_datos.dart`, versión de esquema `3`; las
-migraciones agregan `imagenUrl` (v2) y `uidAutor` (v3)):
+**Tabla `articulos`** (creada en `base_datos.dart`, versión de esquema `4`; las
+migraciones agregan `imagenUrl` (v2), `uidAutor` (v3) y `estado` (v4)):
 
 ```sql
 CREATE TABLE articulos (
@@ -201,7 +208,8 @@ CREATE TABLE articulos (
   vendedor    TEXT    NOT NULL,
   esFavorito  INTEGER NOT NULL DEFAULT 0,
   imagenUrl   TEXT,
-  uidAutor    TEXT
+  uidAutor    TEXT,
+  estado      TEXT NOT NULL DEFAULT 'disponible'
 )
 ```
 
@@ -214,9 +222,13 @@ Archivo de la BD: `unicambio.db` (vía `getDatabasesPath()`).
 **`ArticuloRepositorio`** (`lib/datos/articulo_repositorio.dart`):
 `obtenerTodos()`, `obtenerFavoritos()`, `obtenerPorId(id)`, `insertar(a)`,
 `actualizar(a)`, `eliminar(id)`, `alternarFavorito(id)`,
-`buscar(texto, {categoria})`, `filtrarPorCategoria(categoria)`,
-`enTiempoReal` (getter) y `observarTodos()` (stream en tiempo real; solo la
-nube lo implementa).
+`buscarPagina(consulta, {cursor})` → `PaginaArticulos(articulos, cursor,
+hayMas)`, `buscarPaginaFavoritos({limite, cursor})`,
+`buscar(texto, {categoria})` (histórico),
+`filtrarPorCategoria(categoria)`, `enTiempoReal` (getter) y `observarTodos()`
+(stream en tiempo real; solo la nube lo implementa). `ConsultaArticulos` lleva
+texto, categoría, precio mínimo/máximo, orden, `uidAutor` y `limite` (12 en la
+UI); `firma` incluye `uidAutor` para no mezclar cachés de cuentas.
 
 **`AlmacenamientoImagenes`** (`lib/datos/almacenamiento_imagenes.dart`):
 `subir({articuloId, bytes, nombreArchivo, tipoContenido})` → sube por REST a
@@ -239,14 +251,23 @@ devuelve la URL pública. Configuración: `lib/config_supabase.dart`
   `alAplicarDescripcion` y `alDescartar`.
 
 **`ArticulosProvider`** (`lib/estado/articulos_provider.dart`):
-- Getters: `todos` (sin filtrar), `articulos` (filtrados), `favoritos`,
-  `cargando`, `error`, `textoBusqueda`, `categoriaSeleccionada`, `listaVacia`,
-  `articuloPorId(id)`, `uidActual`, `vendedorActual`, `mios` (por `uidAutor`).
+- Getters: `articulos` (página visible), `mios`, `favoritos`,
+  `cargando`, `cargandoMas`, `cargandoMis`, `cargandoMasMis`,
+  `cargandoFavoritos`, `cargandoMasFavoritos`, `error`, `textoBusqueda`,
+  `categoriaSeleccionada`, `precioMinimo`, `precioMaximo`, `orden`, `hayMas`,
+  `hayMasMis`, `hayMasFavoritos`, `listaVacia`, `articuloPorId(id)`,
+  `uidActual`, `vendedorActual`. Ya no existe `todos`.
 - Métodos: `iniciar()`, `actualizarBusqueda(texto)`,
-  `seleccionarCategoria(categoria?)`, `insertar(a)`, `actualizar(a)`,
-  `eliminar(id)`, `alternarFavorito(id)`,
-  `configurarUsuario({uid, nombre?, correo?})`.
-- Interno: `_ejecutar(...)` maneja `cargando` + `error` + `notifyListeners()`.
+  `seleccionarCategoria(categoria?)`,
+  `actualizarFiltros({precioMinimo, precioMaximo, orden})`, `limpiarFiltros()`,
+  `cargarMas()`, `cargarMis()`, `cargarMasMis()`, `cargarFavoritos()`,
+  `cargarMasFavoritos()`, `refrescarArticulo(id)`, `insertar(a)`,
+  `actualizar(a)`, `cambiarEstado(id, estado)`, `eliminar(id)`,
+  `alternarFavorito(id)`, `configurarUsuario({uid, nombre?, correo?})`.
+- Interno: `_recargarPagina()`, `_recargarMis()`, `_recargarFavoritos()` y
+  `_ejecutar(...)` manejan `cargando`/`error`/`notifyListeners()`; tokens
+  independientes descartan respuestas viejas al escribir rápido. `observarTodos()`
+  solo invalida listas (deuda: aún lee la colección completa).
 
 **`BaseDatos`** (singleton): `BaseDatos.instancia.db`, `.cerrar()`, `.eliminar()`.
 
@@ -276,13 +297,14 @@ ML Kit queda pendiente en un teléfono/emulador.
 
 ---
 
-## 9. Pruebas (58 en total)
+## 9. Pruebas (73 en total)
 
-- `articulo_repositorio_test.dart` (11): usa `sqflite_common_ffi`
+- `articulo_repositorio_test.dart` (18): usa `sqflite_common_ffi`
   (`sqfliteFfiInit()` + `databaseFactory = databaseFactoryFfi`) y prueba el
   repositorio REAL. Limpia la BD en `setUp` con `BaseDatos.instancia.eliminar()`.
-- `articulos_provider_test.dart` (12): usa `ArticuloRepositorioMemoria` y un
-  fake con `StreamController` para el tiempo real; incluye el filtro `mios`.
+- `articulos_provider_test.dart` (17): usa `ArticuloRepositorioMemoria` y un
+  fake con `StreamController` para el tiempo real; incluye filtros, páginas y
+  el filtro `mios`.
 - `almacenamiento_imagenes_test.dart` (5): subida/borrado en Supabase con
   `MockClient` (URL, cabeceras, error HTTP, configuración faltante y enlaces
   ajenos).
@@ -292,6 +314,8 @@ ML Kit queda pendiente en un teléfono/emulador.
   sin precio y variante estable.
 - `panel_sugerencias_test.dart` (5): "Usar"/"Reemplazar"/"Descartar", líneas
   de OCR tocables y panel oculto sin sugerencias.
+- `panel_filtros_test.dart` (3): aplica orden/precio, rechaza rango invertido y
+  avisa al limpiar.
 - `cliente_sugerencias_llm_test.dart` (3): petición al Worker con token/foto,
   falta de token y error HTTP con `MockClient`.
 - `cache_sugerencias_llm_test.dart` (2): misma imagen/tipo reutiliza entrada y
@@ -393,7 +417,7 @@ ML Kit queda pendiente en un teléfono/emulador.
 - Selector con `image_picker` (galería o cámara), vista previa y opción de
   quitar la foto.
 - Subida a **Supabase Storage** por REST (`http`), sin SDK ni login en
-  Supabase; la URL pública se guarda en `imagenUrl` (Firestore y SQLite v3).
+  Supabase; la URL pública se guarda en `imagenUrl` (Firestore y SQLite v4).
 - Reemplaza la "imagen simulada" (degradado + ícono) por la foto real en la
   tarjeta y el detalle.
 - Pendiente manual: crear el bucket público `articulos` y aplicar las
@@ -425,7 +449,8 @@ ML Kit queda pendiente en un teléfono/emulador.
   formulario sigue funcionando. El servicio se crea de forma perezosa y se
   cierra en `dispose`; un token descarta resultados de una foto anterior.
 - Verificación: `flutter analyze` → `No issues found!`, `flutter test` →
-  `All tests passed!` (58), `flutter build apk --debug` y `flutter build web`
+  `All tests passed!` (58 en ese momento), `flutter build apk --debug` y
+  `flutter build web`
   correctos. Prueba manual en Android pendiente (no hay emulador/dispositivo
   conectado en este equipo).
 - Estado: ✅ Hecho.
@@ -469,13 +494,56 @@ ML Kit queda pendiente en un teléfono/emulador.
   Bundle ID al firmar, hay que registrar ese id en Firebase u ocultar Google
   Sign-In en iOS.
 
+### Avance 14 — Búsqueda avanzada con cursor real ✅ HECHO
+- `ConsultaArticulos` y `PaginaArticulos` viajan entre provider y repositorio;
+  el cursor es opaco (`Object?`) para que la UI no conozca Firestore.
+- Firestore usa `where` de categoría/precio, `orderBy` y `limit`. El texto se
+  sigue filtrando en Dart (título + descripción) porque no hay `LIKE`: se leen
+  lotes hasta completar 12 coincidencias y se devuelve el último documento como
+  cursor. SQLite y memoria implementan el mismo contrato.
+- Con rango de precio, `ordenEfectivo` fuerza `precio ASC` (regla de Firestore);
+  por eso el panel   ofrece solo título, precio ascendente y precio descendente.
+- `firestore.indexes.json` contiene los índices compuestos de categoría con
+  título/precio. Desplegados con `firebase deploy --only firestore:indexes`.
+- Inicio tiene panel de filtros en el ícono `tune`, contador de resultados y
+  botón "Cargar más". Los cambios de filtro reinician el cursor y un token
+  descarta respuestas obsoletas.
+- Verificación: `flutter analyze` limpio, `flutter test` (67), builds de APK y
+  web correctos.
+
+### Avance 15 — Paginación total ✅ HECHO
+- El provider ya no expone `todos` ni llama a `obtenerTodos()`. Inicio,
+  "Mis artículos" y favoritos reciben `PaginaArticulos` y siguen un cursor
+  opaco con `cargarMas`, `cargarMasMis` y `cargarMasFavoritos`.
+- `ConsultaArticulos` añade `uidAutor` (también en `firma`) y el repositorio
+  añade `buscarPaginaFavoritos({limite, cursor})`. Firestore pagina favoritos
+  por `FieldPath.documentId` y omite documentos huérfanos.
+- `refrescarArticulo(id)` actualiza la caché del detalle cuando el widget se
+  abre desde una tarjeta. Cada lista tiene tokens propios para descartar
+  respuestas viejas.
+- `observarTodos()` se mantiene solo como señal de invalidación en tiempo real;
+  sigue leyendo la colección completa (deuda documentada abajo).
+- `firestore.indexes.json` amplía los índices con `uidAutor` solo y combinado
+  con categoría, para título y precio ASC/DESC. Desplegados con
+  `firebase deploy --only firestore:indexes`.
+
+### Avance 16 — Estados de publicación ✅ HECHO
+- `Articulo.estado` usa `EstadoPublicacion.disponible|finalizado` con default
+  `disponible`. SQLite sube a v4 (`estado TEXT NOT NULL DEFAULT 'disponible'`);
+  documentos/registros antiguos se leen como disponibles.
+- `EstadoPublicacionUI.etiquetaPara(tipo)` muestra `Vendido`,
+  `Intercambiado` o `Entregado` cuando está finalizado. La tarjeta y el detalle
+  muestran la etiqueta; el detalle desactiva "Contactar al vendedor".
+- "Mis artículos" permite alternar el estado desde el menú y cuenta solo las
+  publicaciones activas. `provider.cambiarEstado(id, estado)` es la única vía
+  de cambio y actualiza caché, detalle y listas.
+- `firestore.rules` valida que `estado` sea `disponible` o `finalizado` al
+  crear/actualizar. No hay caducidad ni filtro por estado en Inicio.
+- Verificación: `flutter analyze` limpio, `flutter test` (73).
+
 ### Backlog de mejoras (prioridad por definir)
 - **Chat / contacto al vendedor**: el botón hoy solo muestra un SnackBar.
 - **Notificaciones**: la campana es decorativa.
-- **Búsqueda avanzada**: filtrar también por descripción; filtrar por rango de
-  precio; ordenar (recientes, precio, relevancia).
-- **Paginación / carga incremental** de artículos.
-- **Estados de publicación**: vendido/disponible, caducidad.
 - **Validaciones extra** en el formulario (longitud, precio máximo) y manejo de
   zonas seguras.
 - **Accesibilidad** (semántica, contraste) e **internacionalización** (i18n).
@@ -486,8 +554,10 @@ ML Kit queda pendiente en un teléfono/emulador.
 - **Seguridad**: reglas de acceso en la nube, no exponer claves.
 
 ### Deuda técnica / limitaciones conocidas
-- Búsqueda por texto en Firestore se hace en memoria (no hay `LIKE`); aceptable
-  a la escala del proyecto.
+- Búsqueda por texto en Firestore se hace en memoria (no hay `LIKE`), aunque
+  ahora solo sobre lotes paginados. `observarTodos()` sigue leyendo la colección
+  completa como señal de invalidación; suscribirse por usuario/consulta queda
+  para un avance futuro.
 - `ArticuloRepositorioSqflite` ya no se usa en la app (solo en sus pruebas);
   se conserva como referencia. `ArticuloRepositorioMemoria` se usa en pruebas
   y si Firebase no arranca.
@@ -622,7 +692,7 @@ token descarta resultados de una foto anterior.
 Dependencias nuevas: `google_mlkit_image_labeling` y
 `google_mlkit_text_recognition` (1.0.1). No se usa Gemini Nano/AICore porque
 requiere dispositivos compatibles y `minSdk 26`. Verificación: `flutter
-analyze` → `No issues found!`, `flutter test` → `All tests passed!` (58),
+analyze` → `No issues found!`, `flutter test` → `All tests passed!` (58 en ese momento),
 `flutter build apk --debug` y `flutter build web` correctos. La prueba manual
 de las sugerencias en un teléfono/emulador Android queda pendiente porque este
 equipo no tiene dispositivos conectados.
@@ -707,7 +777,8 @@ en el repo ni se envía desde la app.
   fábrica; `PantallaPublicar` recibe `sugeridor:` opcional en pruebas y no se
   tocó `main.dart` ni `pantalla_mis_articulos.dart`.
 - Pruebas nuevas: cliente HTTP con `MockClient`, caché por imagen/tipo,
-  decorador con fallback y prioridad del sugeridor. Total: **58 pruebas**;
+  decorador con fallback y prioridad del sugeridor. Total: **58 pruebas en ese
+  momento**.
   `flutter analyze` → `No issues found!`, `flutter test` → `All tests passed!`.
 
 ## Actualización — Avance 13: cierre iOS-ready
@@ -734,3 +805,51 @@ Checklist de prueba en iOS tras instalar el nuevo IPA:
 3. Confirmar que la descripción LLM aparece cuando el Worker responde.
 4. Cambiar tipo/título y verificar que se vuelve a la plantilla local.
 5. Desactivar red y repetir: no debe bloquearse la publicación.
+
+## Actualización — Avance 14: búsqueda avanzada
+
+Se cambió el contrato entre UI, provider y repositorio sin tocar Firestore desde
+las pantallas:
+
+- `ConsultaArticulos` (`lib/modelos/consulta_articulos.dart`) y
+  `PaginaArticulos` (`lib/modelos/pagina_articulos.dart`) son los nuevos DTO.
+  `ConsultaArticulos.ordenEfectivo` fuerza `precio ASC` cuando hay rango.
+- `ArticuloRepositorio.buscarPagina(consulta, {cursor})` devuelve hasta 12
+  artículos. El cursor es un `Object?`: en SQLite/memoria es un desplazamiento
+  y en Firestore un `_CursorNube` con el último `DocumentSnapshot`.
+- `ArticuloRepositorioNube` filtra categoría/precio en el servidor, pide lotes
+  y aplica `texto` en Dart sobre título + descripción. `buscar()` sigue
+  existiendo para código histórico.
+- `ArticulosProvider` conserva `todos` para detalle/"Mis artículos"/favoritos y
+  usa la página para Inicio. `cargarMas()` anexa resultados; un token interno
+  descarta respuestas viejas al cambiar filtros rápido.
+- `PanelFiltros` (`lib/widgets/panel_filtros.dart`) ofrece orden y rango de
+  precio; Inicio muestra el botón "Cargar más" y el número de resultados.
+
+Los índices de `firestore.indexes.json` se desplegaron con
+`firebase deploy --only firestore:indexes --project unicambio-2f543`.
+Verificación final: `flutter analyze` → `No issues found!`, `flutter test` →
+`All tests passed!` (67), `flutter build apk --debug`, `flutter build web` y
+`git diff --check` correctos.
+
+## Actualización — Avances 15 y 16: paginación total y estados
+
+- Se eliminó `ArticulosProvider.todos`. Inicio, "Mis artículos" y favoritos
+  reciben `PaginaArticulos`; `cargarMis()`, `cargarFavoritos()` y sus variantes
+  `cargarMas*` reinician/siguen cursores independientes. `refrescarArticulo(id)`
+  actualiza el detalle sin volver a leer la colección completa.
+- `ConsultaArticulos` incorpora `uidAutor` y el contrato incorpora
+  `buscarPaginaFavoritos({limite, cursor})`. En Firestore, "Mis artículos" usa
+  `where('uidAutor', isEqualTo: ...)` y los favoritos se paginan por id de
+  documento. `observarTodos()` queda como señal de invalidación.
+- `Articulo.estado` (`disponible`/`finalizado`) se persiste en Firestore y en
+  SQLite v4; `EstadoPublicacionUI` da la etiqueta según el tipo. El paso de
+  estado se hace con `provider.cambiarEstado(id, estado)`; la tarjeta, el
+  detalle y "Mis artículos" reflejan el cambio y el contacto se deshabilita al
+  finalizar.
+- `firestore.rules` valida `estado`; `firestore.indexes.json` añade las
+  combinaciones de `uidAutor` con categoría/título/precio. Despliegue con
+  `firebase deploy --only firestore:rules,firestore:indexes --project unicambio-2f543`.
+- Verificación: `flutter analyze` → `No issues found!`, `flutter test` →
+  `All tests passed!` (73), builds de APK y web y `git diff --check` correctos.
+  Este cierre agrupa los Avances 14, 15 y 16.
