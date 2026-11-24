@@ -57,31 +57,30 @@ class _PantallaMisArticulosState extends State<PantallaMisArticulos> {
             child: proveedor.cargandoMis && mios.isEmpty
                 ? const Center(child: CircularProgressIndicator())
                 : mios.isEmpty
-                    ? const EstadoPlaceholder(
-                        icono: Icons.inventory_2_outlined,
-                        titulo: 'Aún no has publicado nada',
-                        subtitulo: 'Toca "Publicar" para crear tu primer anuncio',
-                      )
-                    : ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
-                        itemCount:
-                            mios.length + (proveedor.hayMasMis ? 1 : 0),
-                        separatorBuilder: (BuildContext context, int indice) =>
-                            const SizedBox(height: 12),
-                        itemBuilder: (BuildContext context, int indice) {
-                          if (indice == mios.length) {
-                            return Center(
-                              child: proveedor.cargandoMasMis
-                                  ? const CircularProgressIndicator()
-                                  : FilledButton.tonal(
-                                      onPressed: proveedor.cargarMasMis,
-                                      child: const Text('Cargar más'),
-                                    ),
-                            );
-                          }
-                          return _TarjetaMiArticulo(articulo: mios[indice]);
-                        },
-                      ),
+                ? const EstadoPlaceholder(
+                    icono: Icons.inventory_2_outlined,
+                    titulo: 'Aún no has publicado nada',
+                    subtitulo: 'Toca "Publicar" para crear tu primer anuncio',
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
+                    itemCount: mios.length + (proveedor.hayMasMis ? 1 : 0),
+                    separatorBuilder: (BuildContext context, int indice) =>
+                        const SizedBox(height: 12),
+                    itemBuilder: (BuildContext context, int indice) {
+                      if (indice == mios.length) {
+                        return Center(
+                          child: proveedor.cargandoMasMis
+                              ? const CircularProgressIndicator()
+                              : FilledButton.tonal(
+                                  onPressed: proveedor.cargarMasMis,
+                                  child: const Text('Cargar más'),
+                                ),
+                        );
+                      }
+                      return _TarjetaMiArticulo(articulo: mios[indice]);
+                    },
+                  ),
           ),
         ],
       ),
@@ -101,8 +100,8 @@ class _TarjetaMiArticulo extends StatelessWidget {
     final ArticulosProvider proveedor = context.read<ArticulosProvider>();
     final EstadoPublicacion nuevo =
         articulo.estado == EstadoPublicacion.disponible
-            ? EstadoPublicacion.finalizado
-            : EstadoPublicacion.disponible;
+        ? EstadoPublicacion.finalizado
+        : EstadoPublicacion.disponible;
     await proveedor.cambiarEstado(articulo.id, nuevo);
   }
 
@@ -112,7 +111,9 @@ class _TarjetaMiArticulo extends StatelessWidget {
       context: context,
       builder: (BuildContext contexto) => AlertDialog(
         title: const Text('Eliminar artículo'),
-        content: Text('¿Eliminar "${articulo.titulo}"? Esta acción no se puede deshacer.'),
+        content: Text(
+          '¿Eliminar "${articulo.titulo}"? Esta acción no se puede deshacer.',
+        ),
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.of(contexto).pop(false),
@@ -199,8 +200,8 @@ class _TarjetaMiArticulo extends StatelessWidget {
                             : Icons.lock_outline,
                         size: 14,
                         color: articulo.estado == EstadoPublicacion.disponible
-                            ? Colors.green
-                            : Colors.grey,
+                            ? tema.colorScheme.primary
+                            : tema.colorScheme.onSurfaceVariant,
                       ),
                       const SizedBox(width: 4),
                       Text(
@@ -208,8 +209,8 @@ class _TarjetaMiArticulo extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 12,
                           color: articulo.estado == EstadoPublicacion.disponible
-                              ? Colors.green
-                              : Colors.grey,
+                              ? tema.colorScheme.primary
+                              : tema.colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -276,13 +277,20 @@ class _TarjetaMiArticulo extends StatelessWidget {
                     ],
                   ),
                 ),
-                const PopupMenuItem<String>(
+                PopupMenuItem<String>(
                   value: 'eliminar',
                   child: Row(
                     children: <Widget>[
-                      Icon(Icons.delete_outline, size: 20, color: Colors.red),
-                      SizedBox(width: 10),
-                      Text('Eliminar'),
+                      Icon(
+                        Icons.delete_outline,
+                        size: 20,
+                        color: tema.colorScheme.error,
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Eliminar',
+                        style: TextStyle(color: tema.colorScheme.error),
+                      ),
                     ],
                   ),
                 ),

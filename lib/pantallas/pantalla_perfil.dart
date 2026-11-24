@@ -9,6 +9,7 @@
 import 'dart:typed_data';
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -17,6 +18,7 @@ import '../datos/almacenamiento_imagenes.dart';
 import '../estado/articulos_provider.dart';
 import '../estado/perfil_provider.dart';
 import '../modelos/categoria.dart';
+import '../tema/adaptativo.dart';
 
 /// Pantalla "Mi perfil".
 class PantallaPerfil extends StatefulWidget {
@@ -69,18 +71,17 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
   /// Muestra un mensaje corto al guardar una preferencia.
   void _avisar(String mensaje) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(mensaje)),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(mensaje)));
   }
 
   /// Pide otra vez las sugerencias después de cambiar preferencias.
   Future<void> _recargarNovedades(PerfilProvider perfil) async {
     await context.read<ArticulosProvider>().cargarNovedades(
-          activas: perfil.sugerenciasActivas,
-          categorias: perfil.categoriasSugerencias,
-          desde: perfil.ultimaVista,
-        );
+      activas: perfil.sugerenciasActivas,
+      categorias: perfil.categoriasSugerencias,
+      desde: perfil.ultimaVista,
+    );
   }
 
   /// Guarda los datos de la sesión en el provider para que el saludo y las
@@ -89,10 +90,10 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
     final User? usuario = _usuario;
     if (usuario == null) return;
     context.read<ArticulosProvider>().configurarUsuario(
-          uid: usuario.uid,
-          nombre: usuario.displayName,
-          correo: usuario.email,
-        );
+      uid: usuario.uid,
+      nombre: usuario.displayName,
+      correo: usuario.email,
+    );
   }
 
   /// Edita el número de WhatsApp opcional (autodeclarado, sin verificación).
@@ -113,8 +114,7 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
           decoration: const InputDecoration(
             labelText: 'Celular a 10 dígitos',
             prefixText: '+57 ',
-            helperText:
-                'Solo para que otros estudiantes puedan escribirte. No verificado.',
+            helperText: 'Solo para que otros estudiantes puedan escribirte. No verificado.',
             helperMaxLines: 2,
           ),
         ),
@@ -129,7 +129,8 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
               child: const Text('Quitar'),
             ),
           FilledButton(
-            onPressed: () => Navigator.of(contexto).pop(controlador.text.trim()),
+            onPressed: () =>
+                Navigator.of(contexto).pop(controlador.text.trim()),
             child: const Text('Guardar'),
           ),
         ],
@@ -149,8 +150,9 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
 
   /// Elige las categorías que se verán en las sugerencias.
   Future<void> _editarCategorias(PerfilProvider perfil) async {
-    final Set<Categoria> seleccionadas =
-        Set<Categoria>.from(perfil.categoriasSugerencias);
+    final Set<Categoria> seleccionadas = Set<Categoria>.from(
+      perfil.categoriasSugerencias,
+    );
     final Set<Categoria>? resultado = await showDialog<Set<Categoria>>(
       context: context,
       builder: (BuildContext contexto) => StatefulBuilder(
@@ -204,8 +206,9 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
 
   /// Abre un diálogo para editar el nombre visible.
   Future<void> _editarNombre() async {
-    final TextEditingController controlador =
-        TextEditingController(text: _nombre);
+    final TextEditingController controlador = TextEditingController(
+      text: _nombre,
+    );
     final String? nuevo = await showDialog<String>(
       context: context,
       builder: (BuildContext contexto) => AlertDialog(
@@ -238,9 +241,8 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
       if (!mounted) return;
       _sincronizarProvider();
       setState(() {});
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Nombre actualizado.')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Nombre actualizado.')));
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -253,18 +255,28 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
 
   /// Pide elegir galería o cámara y sube la nueva foto de perfil.
   Future<void> _cambiarFoto() async {
-    final ImageSource? origen = await showModalBottomSheet<ImageSource>(
+    final ImageSource? origen = await mostrarHojaAdaptada<ImageSource>(
       context: context,
       builder: (BuildContext contexto) => SafeArea(
         child: Wrap(
           children: <Widget>[
             ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
+              leading: Icon(
+                iconoAdaptativo(
+                  material: Icons.photo_library_outlined,
+                  cupertino: CupertinoIcons.photo,
+                ),
+              ),
               title: const Text('Elegir de la galería'),
               onTap: () => Navigator.pop(contexto, ImageSource.gallery),
             ),
             ListTile(
-              leading: const Icon(Icons.photo_camera_outlined),
+              leading: Icon(
+                iconoAdaptativo(
+                  material: Icons.photo_camera_outlined,
+                  cupertino: CupertinoIcons.camera,
+                ),
+              ),
               title: const Text('Tomar una foto'),
               onTap: () => Navigator.pop(contexto, ImageSource.camera),
             ),
@@ -402,10 +414,10 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
                   children: <Widget>[
                     CircleAvatar(
                       radius: 54,
-                      backgroundColor:
-                          tema.colorScheme.primary.withValues(alpha: 0.12),
-                      backgroundImage:
-                          foto != null ? NetworkImage(foto) : null,
+                      backgroundColor: tema.colorScheme.primary.withValues(
+                        alpha: 0.12,
+                      ),
+                      backgroundImage: foto != null ? NetworkImage(foto) : null,
                       child: foto == null
                           ? Text(
                               _inicial,
@@ -493,9 +505,7 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
                         : '+${perfil.telefono} · No verificado',
                   ),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: perfil.cargando
-                      ? null
-                      : () => _editarTelefono(perfil),
+                  onTap: perfil.cargando ? null : () => _editarTelefono(perfil),
                 ),
                 const Divider(height: 1),
                 SwitchListTile(
@@ -526,8 +536,8 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
                       perfil.categoriasSugerencias.isEmpty
                           ? 'Ninguna categoría elegida'
                           : perfil.categoriasSugerencias
-                              .map((Categoria c) => c.etiqueta)
-                              .join(', '),
+                                .map((Categoria c) => c.etiqueta)
+                                .join(', '),
                     ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: perfil.cargando

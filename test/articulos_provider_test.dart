@@ -10,6 +10,7 @@
 
 import 'dart:async';
 
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:unicambio/datos/articulo_repositorio_memoria.dart';
@@ -17,6 +18,7 @@ import 'package:unicambio/estado/articulos_provider.dart';
 import 'package:unicambio/modelos/articulo.dart';
 import 'package:unicambio/modelos/categoria.dart';
 import 'package:unicambio/modelos/consulta_articulos.dart';
+import 'package:unicambio/modelos/pagina_articulos.dart';
 
 /// Repositorio de prueba que simula los cambios en tiempo real de Firestore.
 class RepositorioPruebaTiempoReal extends ArticuloRepositorioMemoria {
@@ -38,6 +40,23 @@ class RepositorioPruebaTiempoReal extends ArticuloRepositorioMemoria {
   }
 
   Future<void> cerrar() => _cambios.close();
+}
+
+/// Repositorio que simula un índice faltante en Firestore.
+class RepositorioPruebaIndice extends ArticuloRepositorioMemoria {
+  static const String mensaje = 'The query requires an index: crear-indice';
+
+  @override
+  Future<PaginaArticulos> buscarPagina(
+    ConsultaArticulos consulta, {
+    Object? cursor,
+  }) async {
+    throw FirebaseException(
+      plugin: 'firestore',
+      code: 'failed-precondition',
+      message: mensaje,
+    );
+  }
 }
 
 /// Crea un artículo de prueba.
@@ -419,5 +438,16 @@ void main() {
 
     expect(provider.novedades, isEmpty);
     expect(provider.hayNovedades, isFalse);
+  });
+
+  test('failed-precondition explica el índice faltante', () async {
+    final ArticulosProvider sinIndice = ArticulosProvider(
+      RepositorioPruebaIndice(),
+    );
+
+    await sinIndice.iniciar();
+
+    expect(sinIndice.error, contains('Falta un índice en Firestore'));
+    expect(sinIndice.error, contains(RepositorioPruebaIndice.mensaje));
   });
 }

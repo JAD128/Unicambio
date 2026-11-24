@@ -18,6 +18,7 @@ import '../estado/articulos_provider.dart';
 import '../estado/perfil_provider.dart';
 import '../modelos/articulo.dart';
 import '../modelos/categoria.dart';
+import '../tema/adaptativo.dart';
 import '../widgets/campo_busqueda.dart';
 import '../widgets/chip_categoria.dart';
 import '../widgets/estado_placeholder.dart';
@@ -45,10 +46,10 @@ class _PantallaInicioState extends State<PantallaInicio> {
   Future<void> _cargarNovedades() async {
     final PerfilProvider perfil = context.read<PerfilProvider>();
     await context.read<ArticulosProvider>().cargarNovedades(
-          activas: perfil.sugerenciasActivas,
-          categorias: perfil.categoriasSugerencias,
-          desde: perfil.ultimaVista,
-        );
+      activas: perfil.sugerenciasActivas,
+      categorias: perfil.categoriasSugerencias,
+      desde: perfil.ultimaVista,
+    );
   }
 
   /// Muestra la bandeja de sugerencias y la marca como vista.
@@ -58,7 +59,7 @@ class _PantallaInicioState extends State<PantallaInicio> {
   ) async {
     await context.read<PerfilProvider>().marcarVisto();
     if (!context.mounted) return;
-    await showModalBottomSheet<void>(
+    await mostrarHojaAdaptada<void>(
       context: context,
       builder: (BuildContext contexto) => SafeArea(
         child: ListView.builder(
@@ -73,8 +74,7 @@ class _PantallaInicioState extends State<PantallaInicio> {
                 Navigator.of(contexto).pop();
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
-                    builder: (_) =>
-                        PantallaDetalleArticulo(articulo: articulo),
+                    builder: (_) => PantallaDetalleArticulo(articulo: articulo),
                   ),
                 );
               },
@@ -99,30 +99,34 @@ class _PantallaInicioState extends State<PantallaInicio> {
         actions: <Widget>[
           Padding(
             padding: const EdgeInsets.only(right: 12),
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const PantallaPerfil(),
+            child: Tooltip(
+              message: 'Mi perfil',
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const PantallaPerfil(),
+                  ),
                 ),
-              ),
-              child: CircleAvatar(
-                radius: 18,
-                backgroundImage: FirebaseAuth.instance.currentUser?.photoURL != null
-                    ? NetworkImage(
-                        FirebaseAuth.instance.currentUser!.photoURL!,
-                      )
-                    : null,
-                child: FirebaseAuth.instance.currentUser?.photoURL == null
-                    ? Text(
-                        proveedor.vendedorActual.isEmpty
-                            ? '?'
-                            : proveedor.vendedorActual
-                                .substring(0, 1)
-                                .toUpperCase(),
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      )
-                    : null,
+                child: CircleAvatar(
+                  radius: 18,
+                  backgroundImage:
+                      FirebaseAuth.instance.currentUser?.photoURL != null
+                      ? NetworkImage(
+                          FirebaseAuth.instance.currentUser!.photoURL!,
+                        )
+                      : null,
+                  child: FirebaseAuth.instance.currentUser?.photoURL == null
+                      ? Text(
+                          proveedor.vendedorActual.isEmpty
+                              ? '?'
+                              : proveedor.vendedorActual
+                                    .substring(0, 1)
+                                    .toUpperCase(),
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        )
+                      : null,
+                ),
               ),
             ),
           ),
@@ -153,8 +157,9 @@ class _PantallaInicioState extends State<PantallaInicio> {
                 const SizedBox(height: 14),
                 CampoBusqueda(
                   textoInicial: proveedor.textoBusqueda,
-                  alCambiar: (String texto) =>
-                      context.read<ArticulosProvider>().actualizarBusqueda(texto),
+                  alCambiar: (String texto) => context
+                      .read<ArticulosProvider>()
+                      .actualizarBusqueda(texto),
                   alFiltrar: () => _mostrarFiltros(context, proveedor),
                 ),
               ],
@@ -233,9 +238,8 @@ class _PantallaInicioState extends State<PantallaInicio> {
     BuildContext context,
     ArticulosProvider proveedor,
   ) async {
-    final ValoresFiltros? valores = await showModalBottomSheet<ValoresFiltros>(
+    final ValoresFiltros? valores = await mostrarHojaAdaptada<ValoresFiltros>(
       context: context,
-      isScrollControlled: true,
       builder: (_) => PanelFiltros(
         orden: proveedor.orden,
         precioMinimo: proveedor.precioMinimo,
@@ -246,10 +250,10 @@ class _PantallaInicioState extends State<PantallaInicio> {
     );
     if (valores == null || !context.mounted) return;
     await context.read<ArticulosProvider>().actualizarFiltros(
-          precioMinimo: valores.precioMinimo,
-          precioMaximo: valores.precioMaximo,
-          orden: valores.orden,
-        );
+      precioMinimo: valores.precioMinimo,
+      precioMaximo: valores.precioMaximo,
+      orden: valores.orden,
+    );
   }
 }
 
@@ -319,9 +323,8 @@ class _CuerpoLista extends StatelessWidget {
               ),
             );
           },
-          alTocarFavorito: () => context
-              .read<ArticulosProvider>()
-              .alternarFavorito(articulo.id),
+          alTocarFavorito: () =>
+              context.read<ArticulosProvider>().alternarFavorito(articulo.id),
         );
       },
     );

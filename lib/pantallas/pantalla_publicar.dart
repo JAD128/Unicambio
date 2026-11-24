@@ -11,8 +11,11 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'
+    show FilteringTextInputFormatter, MaxLengthEnforcement, TextInputFormatter;
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
@@ -25,6 +28,8 @@ import '../estado/articulos_provider.dart';
 import '../modelos/articulo.dart';
 import '../modelos/categoria.dart';
 import '../modelos/vision.dart';
+import '../tema/adaptativo.dart';
+import '../utilidades/validadores_formulario.dart';
 import '../widgets/panel_sugerencias.dart';
 
 /// Pantalla del formulario de publicación.
@@ -55,6 +60,9 @@ class PantallaPublicar extends StatefulWidget {
 
 class _PantallaPublicarState extends State<PantallaPublicar> {
   final _formKey = GlobalKey<FormState>();
+  final GlobalKey _claveTitulo = GlobalKey();
+  final GlobalKey _claveDescripcion = GlobalKey();
+  final GlobalKey _clavePrecio = GlobalKey();
   late final TextEditingController _titulo;
   late final TextEditingController _descripcion;
   late final TextEditingController _precio;
@@ -130,13 +138,17 @@ class _PantallaPublicarState extends State<PantallaPublicar> {
 
   /// Valida el formulario y guarda (inserta o actualiza) el artículo.
   Future<void> _guardar() async {
-    if (_guardando || !_formKey.currentState!.validate()) return;
+    if (_guardando) return;
+    if (!_formKey.currentState!.validate()) {
+      _mostrarPrimerError();
+      return;
+    }
     setState(() => _guardando = true);
     final ArticulosProvider proveedor = context.read<ArticulosProvider>();
 
     try {
-      final String id = widget.articulo?.id ??
-          'art_${DateTime.now().microsecondsSinceEpoch}';
+      final String id =
+          widget.articulo?.id ?? 'art_${DateTime.now().microsecondsSinceEpoch}';
       final String? fotoAnterior = widget.articulo?.imagenUrl;
       String? imagenUrl = _quitarImagen ? null : _imagenUrl;
       if (_imagenSeleccionada != null && _bytesImagen != null) {
@@ -172,9 +184,8 @@ class _PantallaPublicarState extends State<PantallaPublicar> {
       }
       if (!mounted) return;
       if (proveedor.error != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(proveedor.error!)),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(proveedor.error!)));
         return;
       }
 
@@ -191,26 +202,57 @@ class _PantallaPublicarState extends State<PantallaPublicar> {
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo guardar la foto o el artículo: $error')),
+        SnackBar(
+          content: Text('No se pudo guardar la foto o el artículo: $error'),
+        ),
       );
     } finally {
       if (mounted) setState(() => _guardando = false);
     }
   }
 
+  /// Lleva el scroll al primer campo con error para que no quede fuera de vista.
+  void _mostrarPrimerError() {
+    final GlobalKey? clave = validarTitulo(_titulo.text) != null
+        ? _claveTitulo
+        : validarDescripcion(_descripcion.text) != null
+        ? _claveDescripcion
+        : validarPrecio(_precio.text, esVenta: true) != null
+        ? _clavePrecio
+        : null;
+    final BuildContext? contexto = clave?.currentContext;
+    if (contexto == null) return;
+    Scrollable.ensureVisible(
+      contexto,
+      alignment: 0.25,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+    );
+  }
+
   Future<void> _mostrarOpcionesImagen() async {
-    final ImageSource? origen = await showModalBottomSheet<ImageSource>(
+    final ImageSource? origen = await mostrarHojaAdaptada<ImageSource>(
       context: context,
       builder: (BuildContext context) => SafeArea(
         child: Wrap(
           children: <Widget>[
             ListTile(
-              leading: const Icon(Icons.photo_library_outlined),
+              leading: Icon(
+                iconoAdaptativo(
+                  material: Icons.photo_library_outlined,
+                  cupertino: CupertinoIcons.photo,
+                ),
+              ),
               title: const Text('Elegir de la galería'),
               onTap: () => Navigator.pop(context, ImageSource.gallery),
             ),
             ListTile(
-              leading: const Icon(Icons.photo_camera_outlined),
+              leading: Icon(
+                iconoAdaptativo(
+                  material: Icons.photo_camera_outlined,
+                  cupertino: CupertinoIcons.camera,
+                ),
+              ),
               title: const Text('Tomar una foto'),
               onTap: () => Navigator.pop(context, ImageSource.camera),
             ),
@@ -287,8 +329,9 @@ class _PantallaPublicarState extends State<PantallaPublicar> {
     }
 
     final String tituloActual = _titulo.text.trim();
-    final String? titulo =
-        tituloActual.isNotEmpty ? tituloActual : sugerencias.titulo;
+    final String? titulo = tituloActual.isNotEmpty
+        ? tituloActual
+        : sugerencias.titulo;
 
     // Si no hay título ni categoría, no hay base para una descripción útil.
     if (titulo == null && sugerencias.categoria == null && !_categoriaTocada) {
@@ -346,6 +389,7 @@ class _PantallaPublicarState extends State<PantallaPublicar> {
       _analizando = false;
     });
   }
+
   @override
   Widget build(BuildContext context) {
     final ThemeData tema = Theme.of(context);
@@ -357,249 +401,343 @@ class _PantallaPublicarState extends State<PantallaPublicar> {
       appBar: AppBar(
         title: Text(_esEdicion ? 'Editar artículo' : 'Publicar artículo'),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-        child: Form(
-          key: _formKey,
-          autovalidateMode: AutovalidateMode.onUserInteraction,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              // ---------------------- Nombre del artículo -------------------
-              TextFormField(
-                controller: _titulo,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(
-                  labelText: 'Nombre del artículo',
-                  hintText: 'Ej: Calculadora científica',
-                  prefixIcon: Icon(Icons.title),
-                ),
-                validator: (String? valor) =>
-                    (valor == null || valor.trim().isEmpty)
-                        ? 'Escribe un título'
-                        : null,
-              ),
-              const SizedBox(height: 14),
+      body: SafeArea(
+        top: false,
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final double ancho = anchoContenido(constraints.maxWidth);
+            return SingleChildScrollView(
+              padding: paddingConTeclado(context),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: ancho),
+                  child: Form(
+                    key: _formKey,
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        // ---------------------- Nombre del artículo -------------------
+                        TextFormField(
+                          key: _claveTitulo,
+                          controller: _titulo,
+                          textCapitalization: TextCapitalization.sentences,
+                          textInputAction: TextInputAction.next,
+                          maxLength: tituloMaximo,
+                          maxLengthEnforcement: MaxLengthEnforcement.enforced,
+                          decoration: InputDecoration(
+                            labelText: 'Nombre del artículo',
+                            hintText: 'Ej: Calculadora científica',
+                            helperText:
+                                'Entre $tituloMinimo y $tituloMaximo caracteres',
+                            prefixIcon: Icon(
+                              iconoAdaptativo(
+                                material: Icons.title,
+                                cupertino: CupertinoIcons.textformat,
+                              ),
+                            ),
+                          ),
+                          validator: validarTitulo,
+                        ),
+                        const SizedBox(height: 14),
 
-              // ------------------------- Descripción -----------------------
-              TextFormField(
-                controller: _descripcion,
-                maxLines: 4,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(
-                  labelText: 'Descripción',
-                  hintText: 'Describe el estado y los detalles del artículo',
-                  alignLabelWithHint: true,
-                  prefixIcon: Icon(Icons.description_outlined),
-                ),
-                validator: (String? valor) =>
-                    (valor == null || valor.trim().isEmpty)
-                        ? 'Escribe una descripción'
-                        : null,
-              ),
-              const SizedBox(height: 20),
+                        // ------------------------- Descripción -----------------------
+                        TextFormField(
+                          key: _claveDescripcion,
+                          controller: _descripcion,
+                          maxLines: 4,
+                          maxLength: descripcionMaxima,
+                          maxLengthEnforcement: MaxLengthEnforcement.enforced,
+                          textCapitalization: TextCapitalization.sentences,
+                          decoration: InputDecoration(
+                            labelText: 'Descripción',
+                            hintText: 'Describe el estado y los detalles del artículo',
+                            helperText: 'Mínimo $descripcionMinima caracteres',
+                            alignLabelWithHint: true,
+                            prefixIcon: Icon(
+                              iconoAdaptativo(
+                                material: Icons.description_outlined,
+                                cupertino: CupertinoIcons.doc_text,
+                              ),
+                            ),
+                          ),
+                          validator: validarDescripcion,
+                        ),
+                        const SizedBox(height: 20),
 
-              // --------------------- Tipo de publicación -------------------
-              _TituloSeccion(texto: 'Tipo de publicación', tema: tema),
-              const SizedBox(height: 8),
-              SegmentedButton<TipoPublicacion>(
-                segments: TipoPublicacion.values
-                    .map(
-                      (TipoPublicacion tipo) => ButtonSegment<TipoPublicacion>(
-                        value: tipo,
-                        label: Text(tipo.etiqueta),
-                      ),
-                    )
-                    .toList(),
-                selected: <TipoPublicacion>{_tipo},
-                onSelectionChanged: (Set<TipoPublicacion> seleccion) {
-                  setState(() => _tipo = seleccion.first);
-                },
-                showSelectedIcon: false,
-              ),
-              const SizedBox(height: 20),
-
-              // --------------------------- Precio --------------------------
-              // Solo se muestra para ventas; regalo muestra "Gratis" y
-              // intercambio "A convenir" automáticamente.
-              if (mostrarPrecio) ...<Widget>[
-                _TituloSeccion(texto: 'Precio', tema: tema),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _precio,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    hintText: '0',
-                    prefixIcon: Icon(Icons.attach_money),
-                  ),
-                  validator: (String? valor) {
-                    if (valor == null || valor.trim().isEmpty) return null;
-                    final double? numero = double.tryParse(valor.trim());
-                    return (numero == null || numero < 0)
-                        ? 'Precio no válido'
-                        : null;
-                  },
-                ),
-                const SizedBox(height: 20),
-              ],
-
-              // -------------------------- Categoría ------------------------
-              _TituloSeccion(texto: 'Categoría', tema: tema),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<Categoria>(
-                // La key hace que el dropdown se reconstruya al aplicar una
-                // categoría sugerida (initialValue solo se lee al crearse).
-                key: ValueKey<Categoria>(_categoria),
-                initialValue: _categoria,
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.category_outlined),
-                ),
-                items: Categoria.values
-                    .map(
-                      (Categoria categoria) => DropdownMenuItem<Categoria>(
-                        value: categoria,
-                        child: Text(categoria.etiqueta),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (Categoria? valor) {
-                  if (valor == null) return;
-                  setState(() {
-                    _categoria = valor;
-                    _categoriaTocada = true;
-                  });
-                },
-              ),
-              const SizedBox(height: 24),
-
-              // ---------------------------- Foto ---------------------------
-              _VistaPreviaImagen(
-                bytes: _bytesImagen,
-                url: _quitarImagen ? null : _imagenUrl,
-                categoria: _categoria,
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _mostrarOpcionesImagen,
-                      icon: const Icon(Icons.add_a_photo_outlined),
-                      label: Text(
-                        _bytesImagen != null || _imagenUrl != null
-                            ? 'Cambiar foto'
-                            : 'Agregar foto',
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(52),
-                      ),
-                    ),
-                  ),
-                  if (_bytesImagen != null || _imagenUrl != null) ...<Widget>[
-                    const SizedBox(width: 8),
-                    IconButton.outlined(
-                      onPressed: _quitarFoto,
-                      tooltip: 'Quitar foto',
-                      icon: const Icon(Icons.delete_outline),
-                    ),
-                  ],
-                ],
-              ),
-              if (_analizando)
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Row(
-                    children: <Widget>[
-                      const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        'Analizando foto...',
-                        style: tema.textTheme.bodyMedium,
-                      ),
-                    ],
-                  ),
-                ),
-              if (kIsWeb && _bytesImagen != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Row(
-                    children: <Widget>[
-                      Icon(
-                        Icons.info_outline,
-                        size: 18,
-                        color: tema.colorScheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'El análisis de fotos con ML Kit solo está '
-                          'disponible en Android.',
-                          style: tema.textTheme.bodySmall?.copyWith(
-                            color: tema.colorScheme.onSurfaceVariant,
+                        // --------------------- Tipo de publicación -------------------
+                        _SeccionFormulario(
+                          titulo: 'Tipo de publicación',
+                          child: SegmentedButton<TipoPublicacion>(
+                            segments: TipoPublicacion.values
+                                .map(
+                                  (TipoPublicacion tipo) =>
+                                      ButtonSegment<TipoPublicacion>(
+                                        value: tipo,
+                                        label: Text(tipo.etiqueta),
+                                      ),
+                                )
+                                .toList(),
+                            selected: <TipoPublicacion>{_tipo},
+                            onSelectionChanged:
+                                (Set<TipoPublicacion> seleccion) {
+                                  setState(() => _tipo = seleccion.first);
+                                },
+                            showSelectedIcon: false,
                           ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 20),
+
+                        // --------------------------- Precio --------------------------
+                        // Solo se muestra para ventas; regalo muestra "Gratis" y
+                        // intercambio "A convenir" automáticamente.
+                        if (mostrarPrecio) ...<Widget>[
+                          _SeccionFormulario(
+                            titulo: 'Precio',
+                            ayuda: 'Opcional. Máximo 99,999,999.',
+                            child: TextFormField(
+                              key: _clavePrecio,
+                              controller: _precio,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              inputFormatters: <TextInputFormatter>[
+                                FilteringTextInputFormatter.allow(
+                                  RegExp(r'^\d*\.?\d*$'),
+                                ),
+                              ],
+                              maxLength: 12,
+                              decoration: const InputDecoration(
+                                hintText: '0',
+                                prefixIcon: Icon(Icons.attach_money),
+                              ),
+                              validator: (String? valor) =>
+                                  validarPrecio(valor, esVenta: true),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                        ],
+
+                        // -------------------------- Categoría ------------------------
+                        _SeccionFormulario(
+                          titulo: 'Categoría',
+                          child: DropdownButtonFormField<Categoria>(
+                            // La key hace que el dropdown se reconstruya al aplicar una
+                            // categoría sugerida (initialValue solo se lee al crearse).
+                            key: ValueKey<Categoria>(_categoria),
+                            initialValue: _categoria,
+                            decoration: const InputDecoration(
+                              prefixIcon: Icon(Icons.category_outlined),
+                            ),
+                            items: Categoria.values
+                                .map(
+                                  (Categoria categoria) =>
+                                      DropdownMenuItem<Categoria>(
+                                        value: categoria,
+                                        child: Text(categoria.etiqueta),
+                                      ),
+                                )
+                                .toList(),
+                            onChanged: (Categoria? valor) {
+                              if (valor == null) return;
+                              setState(() {
+                                _categoria = valor;
+                                _categoriaTocada = true;
+                              });
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+
+                        // ---------------------------- Foto ---------------------------
+                        _SeccionFormulario(
+                          titulo: 'Foto',
+                          ayuda: 'Opcional. Una buena foto ayuda a vender más rápido.',
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: <Widget>[
+                              Semantics(
+                                label:
+                                    _bytesImagen != null || _imagenUrl != null
+                                    ? 'Foto seleccionada del artículo'
+                                    : 'Sin foto seleccionada',
+                                child: _VistaPreviaImagen(
+                                  bytes: _bytesImagen,
+                                  url: _quitarImagen ? null : _imagenUrl,
+                                  categoria: _categoria,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Row(
+                                children: <Widget>[
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      onPressed: _mostrarOpcionesImagen,
+                                      icon: Icon(
+                                        iconoAdaptativo(
+                                          material: Icons.add_a_photo_outlined,
+                                          cupertino: CupertinoIcons.camera,
+                                        ),
+                                      ),
+                                      label: Text(
+                                        _bytesImagen != null ||
+                                                _imagenUrl != null
+                                            ? 'Cambiar foto'
+                                            : 'Agregar foto',
+                                      ),
+                                    ),
+                                  ),
+                                  if (_bytesImagen != null ||
+                                      _imagenUrl != null) ...<Widget>[
+                                    const SizedBox(width: 8),
+                                    IconButton.outlined(
+                                      onPressed: _quitarFoto,
+                                      tooltip: 'Quitar foto',
+                                      icon: const Icon(Icons.delete_outline),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (_analizando)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: Row(
+                              children: <Widget>[
+                                const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Text(
+                                  'Analizando foto...',
+                                  style: tema.textTheme.bodyMedium,
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (kIsWeb && _bytesImagen != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: Row(
+                              children: <Widget>[
+                                Icon(
+                                  Icons.info_outline,
+                                  size: 18,
+                                  color: tema.colorScheme.onSurfaceVariant,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'El análisis de fotos con ML Kit solo está '
+                                    'disponible en Android.',
+                                    style: tema.textTheme.bodySmall?.copyWith(
+                                      color: tema.colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (sugerencias != null) ...<Widget>[
+                          const SizedBox(height: 14),
+                          PanelSugerencias(
+                            sugerencias: sugerencias,
+                            descripcion: _descripcionSugerida(sugerencias),
+                            tituloActual: _titulo.text,
+                            descripcionActual: _descripcion.text,
+                            categoriaActual: _categoria,
+                            alAplicarCategoria: _aplicarCategoria,
+                            alAplicarTitulo: _aplicarTitulo,
+                            alAplicarDescripcion: _aplicarDescripcion,
+                            alDescartar: _descartarSugerencias,
+                          ),
+                        ],
+                        const SizedBox(height: 28),
+
+                        // -------------------------- Guardar --------------------------
+                        FilledButton.icon(
+                          onPressed: _guardando ? null : _guardar,
+                          icon: _guardando
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.check),
+                          label: Text(
+                            _guardando
+                                ? 'Guardando...'
+                                : _esEdicion
+                                ? 'Guardar cambios'
+                                : 'Publicar artículo',
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              if (sugerencias != null) ...<Widget>[
-                const SizedBox(height: 14),
-                PanelSugerencias(
-                  sugerencias: sugerencias,
-                  descripcion: _descripcionSugerida(sugerencias),
-                  tituloActual: _titulo.text,
-                  descripcionActual: _descripcion.text,
-                  categoriaActual: _categoria,
-                  alAplicarCategoria: _aplicarCategoria,
-                  alAplicarTitulo: _aplicarTitulo,
-                  alAplicarDescripcion: _aplicarDescripcion,
-                  alDescartar: _descartarSugerencias,
-                ),
-              ],
-              const SizedBox(height: 28),
-
-              // -------------------------- Guardar --------------------------
-              FilledButton.icon(
-                onPressed: _guardando ? null : _guardar,
-                icon: _guardando
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.check),
-                label: Text(
-                  _guardando
-                      ? 'Guardando...'
-                      : _esEdicion
-                          ? 'Guardar cambios'
-                          : 'Publicar artículo',
-                ),
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
   }
 }
 
-/// Título pequeño que separa las secciones del formulario.
-class _TituloSeccion extends StatelessWidget {
-  final String texto;
-  final ThemeData tema;
+/// Sección agrupada del formulario, con encabezado y tarjeta.
+class _SeccionFormulario extends StatelessWidget {
+  const _SeccionFormulario({
+    required this.titulo,
+    this.ayuda,
+    required this.child,
+  });
 
-  const _TituloSeccion({required this.texto, required this.tema});
+  final String titulo;
+  final String? ayuda;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      texto,
-      style: tema.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+    final ThemeData tema = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Text(
+            titulo.toUpperCase(),
+            style: tema.textTheme.labelLarge?.copyWith(
+              color: tema.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.8,
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Card(
+          child: Padding(padding: const EdgeInsets.all(12), child: child),
+        ),
+        if (ayuda != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6, left: 4),
+            child: Text(
+              ayuda!,
+              style: tema.textTheme.bodySmall?.copyWith(
+                color: tema.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -633,22 +771,18 @@ class _VistaPreviaImagen extends StatelessWidget {
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
-      child: SizedBox(
-        height: 190,
-        width: double.infinity,
-        child: contenido,
-      ),
+      child: SizedBox(height: 190, width: double.infinity, child: contenido),
     );
   }
 
   Widget _marcador(BuildContext context) => ColoredBox(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        child: Center(
-          child: Icon(
-            categoria.icono,
-            size: 54,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-      );
+    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+    child: Center(
+      child: Icon(
+        categoria.icono,
+        size: 54,
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+      ),
+    ),
+  );
 }

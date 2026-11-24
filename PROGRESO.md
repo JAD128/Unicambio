@@ -3,8 +3,10 @@
 > Documento de contexto y bitácora. Léelo completo al retomar el trabajo para
 > no perder el hilo. Actualízalo al cerrar cada avance.
 
-Última actualización: cierre del **Avance 17 — WhatsApp opcional y sugerencias in-app**.
-Firebase/Google/ML Kit en iOS ya fueron validados en el iPhone.
+Última actualización: **Avance 18** (formulario validado, estética iOS-inspired
+adaptable, iconos/splash) junto con la corrección de índices de Firestore y el
+diagnóstico de `failed-precondition`. Firebase/Google/ML Kit en iOS ya fueron
+validados en el iPhone.
 
 ---
 
@@ -41,6 +43,7 @@ Firebase/Google/ML Kit en iOS ya fueron validados en el iPhone.
 | 15 — Paginación total | Sin `todos`: Inicio, Mis artículos y favoritos por cursor | ✅ Hecho (71 pruebas) |
 | 16 — Estados de publicación | `disponible`/`finalizado`, etiquetas y acciones | ✅ Hecho (73 pruebas) |
 | 17 — WhatsApp + sugerencias | Contacto opcional, compartir texto y novedades in-app | ✅ Hecho (86 pruebas) |
+| 18 — Formulario y estética | Validaciones, tema iOS-inspired adaptable e iconos/splash | ✅ Hecho (95 pruebas) |
 
 > **Incidente del Avance 6**: al implementar la autenticación se reescribieron
 > `main.dart` y las pantallas usando datos de ejemplo estáticos
@@ -53,7 +56,7 @@ Verificación más reciente:
 
 ```bash
 flutter analyze   # -> No issues found!
-flutter test      # -> All tests passed!  (86 pruebas)
+flutter test      # -> All tests passed!  (95 pruebas)
 ```
 
 ---
@@ -331,7 +334,7 @@ ML Kit queda pendiente en un teléfono/emulador.
 
 ---
 
-## 9. Pruebas (86 en total)
+## 9. Pruebas (95 en total)
 
 - `articulo_repositorio_test.dart` (20): usa `sqflite_common_ffi`
   (`sqfliteFfiInit()` + `databaseFactory = databaseFactoryFfi`) y prueba el
@@ -366,6 +369,8 @@ ML Kit queda pendiente en un teléfono/emulador.
 - `widget_test.dart` (3): smoke tests de UI; envuelven pantallas con ambos
   providers en memoria y comprueban contacto/compartir por WhatsApp con un
   lanzador falso.
+- `validadores_formulario_test.dart` (8): título 5-80, descripción 10-1000 y
+  precio opcional ≤ 99,999,999 (incluye coma decimal y tipo distinto de venta).
 
 > Nota: las pruebas de widgets usan el repositorio en memoria porque SQLite no
 > corre en el entorno de test sin ffi.
@@ -937,5 +942,59 @@ Verificación final: `flutter analyze` → `No issues found!`, `flutter test` �
   en Firestore y aplica el resto de los filtros en Dart sobre un lote acotado.
 - Las reglas de `usuarios/{uid}` se desplegaron con
   `firebase deploy --only firestore:rules --project unicambio-2f543`.
+- Verificación del avance: `flutter analyze` → `No issues found!`,
+  `flutter test` → `All tests passed!` (86), builds de APK y web y
+  `git diff --check` correctos.
+
+## Corrección posterior — `failed-precondition` al probar en iOS
+
+- El iPhone mostraba `Error al acceder a la nube (failed-precondition)`.
+  En Firestore ese código significa que la consulta necesita un índice que el
+  proyecto no tenía desplegado.
+- `firebase.json` solo declaraba `firestore.rules`; ahora también declara
+  `"indexes": "firestore.indexes.json"` para que el despliegue sea explícito.
+- Se ejecutó `firebase deploy --only firestore:indexes --project unicambio-2f543`.
+  `firebase firestore:indexes` pasó de `"indexes": []` a listar los 9 índices
+  compuestos definidos localmente (categoria/titulo, categoria/precio,
+  uidAutor/titulo, uidAutor/precio y uidAutor/categoria/*).
+- `_mensajeDeError` en `ArticulosProvider` ahora muestra el mensaje completo de
+  `FirebaseException` para `failed-precondition` y lo envía a `debugPrint`, de
+  modo que si aparece otra consulta sin índice se sabe cuál crear.
+- Nueva prueba: `failed-precondition explica el índice faltante`. Total: 87.
 - Verificación: `flutter analyze` → `No issues found!`, `flutter test` →
-  `All tests passed!` (86), builds de APK y web y `git diff --check` correctos.
+  `All tests passed!` (87). Falta que la usuaria repita la prueba en el iPhone;
+  si el error persiste, el nuevo mensaje permitirá crear el índice exacto.
+
+## Avance 18 — Formulario validado y estética adaptable
+
+- Este avance se entregó **junto** con la corrección de índices anterior: el
+  mismo commit pendiente incluye `failed-precondition` y el trabajo visual.
+- `lib/tema/tema_app.dart` centraliza el lenguaje iOS-inspired: fondo agrupado
+  `0xFFF2F2F7`, superficies blancas, texto `0xFF1C1C1E`, separadores
+  `0xFFE5E5EA`, radios 18/14, AppBar/Card/campos/botones/hojas coherentes.
+- `lib/tema/adaptativo.dart` aporta `esIOS`, `iconoAdaptativo`,
+  `anchoContenido`, `paddingConTeclado` y `mostrarHojaAdaptada` (Cupertino en
+  iOS, Material con drag handle en Android/web). Las hojas de foto, novedades
+  y filtros ya lo usan.
+- `lib/utilidades/validadores_formulario.dart` concentra las reglas puras:
+  título 5-80, descripción 10-1000, precio opcional ≤ 99,999,999 (acepta coma
+  decimal y solo aplica a ventas). `PantallaPublicar` usa `GlobalKey` y
+  `Scrollable.ensureVisible` para llevar el scroll al primer campo inválido;
+  añade `maxLength`, ayudas, formato numérico, `SafeArea`, ancho máximo en web
+  (760/640), `Semantics` y tooltips.
+- Se alinearon los colores semánticos de "Mis artículos" y el detalle con
+  `ColorScheme` en vez de `Colors.green/red/teal` sueltos.
+- Branding: nuevas dependencias dev `flutter_launcher_icons 0.14.4` y
+  `flutter_native_splash 2.4.8`; configuración en `flutter_launcher_icons.yaml`
+  y `flutter_native_splash.yaml`. El logo actual es **provisional**: el
+  definitivo debe reemplazar `assets/logo/unicambio.png` e
+  `assets/logo/unicambio_foreground.png`, y luego ejecutar
+  `dart run flutter_launcher_icons` y `dart run flutter_native_splash:create`.
+  En iOS se usa `remove_alpha_ios: true` para cumplir con App Store.
+- No se agregaron FCM/APNs, SMS ni chat: siguen fuera de alcance.
+- Pruebas nuevas: `validadores_formulario_test.dart` (8). Total: 95.
+- Verificación final: `flutter pub get`, `flutter analyze` → `No issues found!`,
+  `flutter test` → `All tests passed!` (95), `flutter build apk --debug` y
+  `flutter build web` correctos, `git diff --check` sin errores (solo avisos
+  LF→CRLF de Windows). Falta regenerar el IPA con Codemagic cuando llegue el
+  logo definitivo.

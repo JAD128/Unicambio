@@ -237,3 +237,14 @@ firebase deploy --only firestore:rules --project unicambio-2f543
 
 No hay índices compuestos nuevos: `buscarNovedades` filtra por `creadoEn` en
 Firestore y aplica categoría/estado/autor en Dart sobre un lote acotado.
+
+Los 9 índices compuestos de búsqueda/filtros sí son necesarios. `firebase.json`
+declara `"indexes": "firestore.indexes.json"` y deben desplegarse con:
+
+```bash
+firebase deploy --only firestore:indexes --project unicambio-2f543
+```
+
+Si una consulta devuelve `failed-precondition`, el mensaje de la app incluye el
+detalle de Firestore con la URL del índice que falta. Verifica el estado remoto
+con `firebase firestore:indexes --project unicambio-2f543`.

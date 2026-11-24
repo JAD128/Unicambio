@@ -14,7 +14,7 @@ cada avance.
 ```bash
 flutter pub get   # tras tocar pubspec.yaml
 flutter analyze   # -> No issues found!
-flutter test      # -> All tests passed!  (86 pruebas)
+flutter test      # -> All tests passed!  (95 pruebas)
 ```
 
 No hay CI de pruebas: `analyze` + `test` son la única verificación local.
@@ -97,6 +97,13 @@ Pantallas --context.watch/read--> ArticulosProvider (ChangeNotifier)
   Worker, `ResultadoVision` conserva ML Kit y `SugeridorPublicacionLlm` usa el
   respaldo local. `PlantillaGeneradorDescripcion` sigue vigente para cambios de
   tipo/categoría/título y cuando no hay respuesta del LLM.
+- **Formulario y estética (Avance 18):** `lib/tema/tema_app.dart` concentra el
+  tema iOS-inspired (fondo agrupado, superficies blancas, esquinas suaves);
+  `lib/tema/adaptativo.dart` da hojas Cupertino en iOS y Material en
+  Android/web, iconos por plataforma y ancho máximo en web.
+  `lib/utilidades/validadores_formulario.dart` contiene las reglas puras del
+  formulario (título 5-80, descripción 10-1000, precio ≤ 99,999,999) y
+  `PantallaPublicar` usa keys para llevar el scroll al primer campo inválido.
 - API y getters exactos: ver `PROGRESO.md` §7 antes de tocar provider o
   repositorio.
 
@@ -118,6 +125,8 @@ Pantallas --context.watch/read--> ArticulosProvider (ChangeNotifier)
   `servicio_vision_con_llm_test.dart` y `sugeridor_publicacion_llm_test.dart`.
   Para inyectar dependencias en pruebas, `PantallaPublicar` acepta
   `servicioVision:`, `generadorDescripcion:` y `sugeridor:`.
+- Las reglas del formulario se prueban sin widgets en
+  `test/validadores_formulario_test.dart`.
 - Para un solo archivo: `flutter test test/articulos_provider_test.dart`.
 
 ## Convenciones del repo
@@ -164,7 +173,11 @@ Pantallas --context.watch/read--> ArticulosProvider (ChangeNotifier)
   `scripts/download_mlkit_bundles.sh` baja los 3 bundles a `ios/mlkit_bundles`,
   `codemagic.yaml` los copia en `Runner.app` después del build y
   `scripts/configure_ios_mlkit.rb` registra `GoogleService-Info.plist` con
-  `xcodeproj`.
+   `xcodeproj`.
+- El logo definitivo debe reemplazar `assets/logo/unicambio.png` y
+  `assets/logo/unicambio_foreground.png`; luego ejecutar
+  `dart run flutter_launcher_icons` y `dart run flutter_native_splash:create`.
 - Deuda técnica consciente: la búsqueda en Firestore es en memoria (no hay
+
   `LIKE`); resolver en un avance futuro (`PROGRESO.md` §11). La paginación ya es
   real, pero `todos` sigue leyendo la colección completa.

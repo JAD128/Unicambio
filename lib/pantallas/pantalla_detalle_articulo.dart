@@ -72,8 +72,9 @@ class _PantallaDetalleArticuloState extends State<PantallaDetalleArticulo> {
     if (uid == null || uid == articulos.uidActual) return;
 
     setState(() => _cargandoTelefono = true);
-    final String? telefono =
-        await context.read<PerfilProvider>().telefonoDe(uid);
+    final String? telefono = await context.read<PerfilProvider>().telefonoDe(
+      uid,
+    );
     if (!mounted) return;
     setState(() {
       _telefonoVendedor = telefono;
@@ -85,9 +86,7 @@ class _PantallaDetalleArticuloState extends State<PantallaDetalleArticulo> {
   void _avisar(bool abierto, String mensaje) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(abierto ? mensaje : 'No se pudo abrir WhatsApp.'),
-      ),
+      SnackBar(content: Text(abierto ? mensaje : 'No se pudo abrir WhatsApp.')),
     );
   }
 
@@ -97,17 +96,16 @@ class _PantallaDetalleArticuloState extends State<PantallaDetalleArticulo> {
     final ArticulosProvider proveedor = context.watch<ArticulosProvider>();
     final Articulo actual =
         proveedor.articuloPorId(widget.articulo.id) ?? widget.articulo;
-    final bool esPropio = actual.uidAutor != null &&
-        actual.uidAutor == proveedor.uidActual;
+    final bool esPropio =
+        actual.uidAutor != null && actual.uidAutor == proveedor.uidActual;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Detalle del artículo'),
         actions: <Widget>[
           IconButton(
-            onPressed: () => context
-                .read<ArticulosProvider>()
-                .alternarFavorito(actual.id),
+            onPressed: () =>
+                context.read<ArticulosProvider>().alternarFavorito(actual.id),
             icon: Icon(
               actual.esFavorito ? Icons.favorite : Icons.favorite_border,
               color: actual.esFavorito ? const Color(0xFFE53935) : null,
@@ -217,8 +215,9 @@ class _PantallaDetalleArticuloState extends State<PantallaDetalleArticulo> {
             cargandoTelefono: _cargandoTelefono,
             telefonoVendedor: _telefonoVendedor,
             alCompartir: () async {
-              final bool abierto =
-                  await widget.lanzador.compartir(textoCompartirArticulo(actual));
+              final bool abierto = await widget.lanzador.compartir(
+                textoCompartirArticulo(actual),
+              );
               _avisar(abierto, 'WhatsApp abierto para compartir.');
             },
             alContactar: () async {
@@ -265,9 +264,7 @@ class _AccionesDetalle extends StatelessWidget {
           key: const Key('contactar-vendedor'),
           onPressed: null,
           icon: Icon(esPropio ? Icons.person_outline : Icons.lock_outline),
-          label: Text(
-            esPropio ? 'Tu publicación' : 'Publicación finalizada',
-          ),
+          label: Text(esPropio ? 'Tu publicación' : 'Publicación finalizada'),
         ),
       );
     }
@@ -289,17 +286,16 @@ class _AccionesDetalle extends StatelessWidget {
             Expanded(
               child: FilledButton.icon(
                 key: const Key('contactar-vendedor'),
-                onPressed:
-                    cargandoTelefono || telefonoVendedor == null
-                        ? null
-                        : alContactar,
+                onPressed: cargandoTelefono || telefonoVendedor == null
+                    ? null
+                    : alContactar,
                 icon: const Icon(Icons.chat_bubble_outline),
                 label: Text(
                   cargandoTelefono
                       ? 'Buscando...'
                       : telefonoVendedor == null
-                          ? 'Sin WhatsApp'
-                          : 'Abrir WhatsApp',
+                      ? 'Sin WhatsApp'
+                      : 'Abrir WhatsApp',
                 ),
               ),
             ),
@@ -454,7 +450,7 @@ class _TarjetaVendedor extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(Icons.verified_outlined, color: Color(0xFF00897B)),
+            Icon(Icons.verified_outlined, color: tema.colorScheme.primary),
           ],
         ),
       ),

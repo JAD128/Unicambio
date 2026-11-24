@@ -728,11 +728,14 @@ class ArticulosProvider extends ChangeNotifier {
   /// Traduce una excepción a un mensaje amigable en español.
   String _mensajeDeError(Object error) {
     if (error is FirebaseException) {
+      debugPrint('Firestore ${error.code}: ${error.message}');
       return switch (error.code) {
         'network-request-failed' => 'Sin conexión a internet. Revisa tu red.',
         'permission-denied' =>
           'No tienes permiso para esta operación. Inicia sesión de nuevo.',
         'unavailable' => 'El servicio no responde. Intenta de nuevo en un momento.',
+        'failed-precondition' =>
+          'Falta un índice en Firestore. ${error.message ?? 'Revisa la consola.'}',
         _ => 'Error al acceder a la nube (${error.code}).',
       };
     }

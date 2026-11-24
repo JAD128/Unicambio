@@ -1,0 +1,11 @@
+flutter_native_splash:
+  color: "#F2F2F7"
+  color_web: "#F2F2F7"
+  image: "assets/logo/unicambio.png"
+  android: true
+  ios: true
+  web: true
+
+  android_12:
+    color: "#F2F2F7"
+    image: "assets/logo/unicambio.png"
