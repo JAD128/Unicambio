@@ -120,6 +120,9 @@ class Articulo {
   /// Estado actual de la publicación (por defecto, disponible).
   final EstadoPublicacion estado;
 
+  /// Momento en que se publicó el artículo (null en datos históricos).
+  final DateTime? creadoEn;
+
   /// Constructor constante: permite crear artículos de ejemplo sin costo extra.
   const Articulo({
     required this.id,
@@ -133,6 +136,7 @@ class Articulo {
     this.imagenUrl,
     this.uidAutor,
     this.estado = EstadoPublicacion.disponible,
+    this.creadoEn,
   });
 
   /// Crea una copia del artículo cambiando solo los campos que se indiquen.
@@ -152,6 +156,7 @@ class Articulo {
     String? imagenUrl,
     String? uidAutor,
     EstadoPublicacion? estado,
+    DateTime? creadoEn,
     bool borrarImagen = false,
   }) {
     return Articulo(
@@ -166,6 +171,7 @@ class Articulo {
       imagenUrl: borrarImagen ? null : imagenUrl ?? this.imagenUrl,
       uidAutor: uidAutor ?? this.uidAutor,
       estado: estado ?? this.estado,
+      creadoEn: creadoEn ?? this.creadoEn,
     );
   }
 
@@ -187,6 +193,7 @@ class Articulo {
       'imagenUrl': imagenUrl,
       'uidAutor': uidAutor,
       'estado': estado.name,
+      'creadoEn': creadoEn?.toIso8601String(),
     };
   }
 
@@ -207,6 +214,9 @@ class Articulo {
       esFavorito: (map['esFavorito'] as int) == 1,
       imagenUrl: map['imagenUrl'] as String?,
       uidAutor: map['uidAutor'] as String?,
+      creadoEn: map['creadoEn'] is String
+          ? DateTime.tryParse(map['creadoEn'] as String)
+          : null,
       estado: EstadoPublicacion.values.firstWhere(
         (EstadoPublicacion valor) =>
             valor.name == (map['estado'] as String? ?? 'disponible'),
@@ -214,6 +224,10 @@ class Articulo {
       ),
     );
   }
+
+  /// Fecha usable para comparar artículos históricos que no tienen [creadoEn].
+  DateTime get fechaPublicacion =>
+      creadoEn ?? DateTime.fromMillisecondsSinceEpoch(0);
 
   /// Devuelve el texto de precio listo para mostrar en pantalla.
   ///

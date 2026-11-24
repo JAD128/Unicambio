@@ -16,20 +16,61 @@ import 'package:provider/provider.dart';
 
 import 'package:unicambio/datos/articulo_repositorio_memoria.dart';
 import 'package:unicambio/datos/articulos_ejemplo.dart';
+import 'package:unicambio/datos/lanzador_whatsapp.dart';
+import 'package:unicambio/datos/perfil_repositorio.dart';
 import 'package:unicambio/estado/articulos_provider.dart';
+import 'package:unicambio/estado/perfil_provider.dart';
 import 'package:unicambio/main.dart';
 import 'package:unicambio/pantallas/pantalla_detalle_articulo.dart';
 import 'package:unicambio/pantallas/pantalla_favoritos.dart';
 import 'package:unicambio/pantallas/pantalla_mis_articulos.dart';
 import 'package:unicambio/pantallas/pantalla_publicar.dart';
+import 'package:unicambio/modelos/articulo.dart';
+import 'package:unicambio/modelos/categoria.dart';
+import 'package:unicambio/modelos/perfil_usuario.dart';
 import 'package:unicambio/tema/tema_app.dart';
 
-/// Envuelve [pantalla] con un provider de prueba (repositorio en memoria).
-Widget conProvider(Widget pantalla) {
-  return ChangeNotifierProvider<ArticulosProvider>(
-    create: (_) => ArticulosProvider(
-      ArticuloRepositorioMemoria(iniciales: articulosEjemplo),
-    ),
+/// Lanzador falso que solo recuerda los mensajes enviados.
+class LanzadorFalso implements LanzadorWhatsapp {
+  String? telefono;
+  String? mensajeContacto;
+  String? mensajeCompartir;
+
+  @override
+  Future<bool> contactar({
+    required String telefono,
+    required String mensaje,
+  }) async {
+    this.telefono = telefono;
+    mensajeContacto = mensaje;
+    return true;
+  }
+
+  @override
+  Future<bool> compartir(String mensaje) async {
+    mensajeCompartir = mensaje;
+    return true;
+  }
+}
+
+/// Envuelve [pantalla] con providers de prueba (repositorios en memoria).
+Widget conProvider(
+  Widget pantalla, {
+  PerfilRepositorio? repositorioPerfil,
+}) {
+  return MultiProvider(
+    providers: [
+      ChangeNotifierProvider<ArticulosProvider>(
+        create: (_) => ArticulosProvider(
+          ArticuloRepositorioMemoria(iniciales: articulosEjemplo),
+        ),
+      ),
+      ChangeNotifierProvider<PerfilProvider>(
+        create: (_) => PerfilProvider(
+          repositorioPerfil ?? PerfilRepositorioMemoria(),
+        ),
+      ),
+    ],
     child: MaterialApp(theme: TemaApp.claro, home: pantalla),
   );
 }
@@ -63,5 +104,46 @@ void main() {
       await tester.pumpWidget(conProvider(pantalla));
       await tester.pumpAndSettle();
     }
+  });
+
+  testWidgets('el detalle contacta y comparte por WhatsApp con texto',
+      (WidgetTester tester) async {
+    final LanzadorFalso lanzador = LanzadorFalso();
+    final PerfilRepositorio repositorio = PerfilRepositorioMemoria(
+      iniciales: <String, PerfilUsuario>{
+        'vendedor': const PerfilUsuario(
+          uid: 'vendedor',
+          telefono: '573001234567',
+        ),
+      },
+    );
+    final Articulo articulo = Articulo(
+      id: 'w1',
+      titulo: 'Libro de prueba',
+      descripcion: 'En buen estado',
+      precio: 1000,
+      categoria: Categoria.libros,
+      tipo: TipoPublicacion.venta,
+      vendedor: 'Ana',
+      uidAutor: 'vendedor',
+      creadoEn: DateTime(2026, 11, 23),
+    );
+
+    await tester.pumpWidget(
+      conProvider(
+        PantallaDetalleArticulo(articulo: articulo, lanzador: lanzador),
+        repositorioPerfil: repositorio,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('contactar-vendedor')));
+    await tester.pumpAndSettle();
+    expect(lanzador.telefono, '573001234567');
+    expect(lanzador.mensajeContacto, contains('Libro de prueba'));
+
+    await tester.tap(find.byKey(const Key('compartir-whatsapp')));
+    await tester.pumpAndSettle();
+    expect(lanzador.mensajeCompartir, contains('Libro de prueba'));
   });
 }

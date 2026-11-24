@@ -46,8 +46,13 @@ Auth.
 - **Estados de publicación:** cada artículo está `Disponible` o finalizado
   (`Vendido`, `Intercambiado` o `Entregado`). En "Mis artículos" puedes marcarlo
   como finalizado o volver a disponible; el detalle deshabilita el contacto.
-- **Pruebas:** 73 pruebas (repositorio con ffi, provider, almacenamiento,
-  visión, LLM, filtros y widgets).
+- **WhatsApp + sugerencias in-app:** en Mi perfil puedes guardar un número de
+  WhatsApp opcional (autodeclarado) y activar un interruptor de novedades. Con
+  la app abierta, Inicio muestra una bandeja de artículos recientes; el detalle
+  permite escribir al vendedor o compartir el artículo como texto por
+  `wa.me`. No hay push ni verificación SMS.
+- **Pruebas:** 86 pruebas (repositorio con ffi, providers, almacenamiento,
+  visión, LLM, filtros, WhatsApp y widgets).
 - **iOS listo para Codemagic:** scaffold, Firebase/Google Sign-In y workflow
   `ios-unsigned` para producir un IPA sin firma e instalarlo con Sideloadly.
 
@@ -239,7 +244,7 @@ flutter test
 ```
 
 Al actualizar este README, las verificaciones reportaron **No issues
-found!** y **All tests passed!** (73 pruebas). También compilan
+found!** y **All tests passed!** (86 pruebas). También compilan
 `flutter build apk --debug` y `flutter build web`.
 
 ## Estructura relevante
@@ -253,9 +258,10 @@ lib/
 │   ├── pantalla_inicio.dart         # Inicio y acción de cerrar sesión
 │   ├── pantalla_favoritos.dart
 │   ├── pantalla_mis_articulos.dart
-│   └── pantalla_publicar.dart
-├── datos/                            # Repositorios, Supabase, visión y cliente LLM
-├── estado/                           # Estado de artículos
+│   ├── pantalla_publicar.dart
+│   └── pantalla_perfil.dart          # Perfil, WhatsApp y preferencias
+├── datos/                            # Repositorios, Supabase, visión, LLM y WhatsApp
+├── estado/                           # Estado de artículos y perfil
 ├── modelos/                          # ConsultaArticulos y PaginaArticulos
 ├── widgets/                          # PanelSugerencias y PanelFiltros
 └── tema/                             # Tema visual Material 3
@@ -277,15 +283,17 @@ test/
 - Cloud Firestore (`cloud_firestore`) para los artículos y favoritos en la nube.
 - Supabase Storage (API REST con `http`) para las fotos de artículos y perfil.
 - `image_picker` para elegir la foto de la galería o tomarla con la cámara.
+- `url_launcher` para abrir enlaces `wa.me` de WhatsApp en Android, iOS y web.
 - Google ML Kit (`google_mlkit_image_labeling` y
   `google_mlkit_text_recognition`) para etiquetado y OCR on-device en Android.
 - SQLite (`sqflite`) se conserva como implementación histórica y para sus
   pruebas; la app usa Firestore.
-- Provider para el estado de artículos.
+- Provider para el estado de artículos y de perfil.
 
 ## Alcance pendiente
 
 - Verificación de correo.
 - Prueba manual de las sugerencias de ML Kit en un dispositivo/emulador
   Android (el build APK ya compila).
-- Chat con el vendedor y notificaciones.
+- Verificación SMS del número de WhatsApp y notificaciones push (FCM/APNs).
+  El contacto por WhatsApp y las sugerencias dentro de la app ya funcionan.

@@ -32,6 +32,7 @@ Articulo crearArticulo({
   String? imagenUrl,
   String? uidAutor,
   EstadoPublicacion estado = EstadoPublicacion.disponible,
+  DateTime? creadoEn,
 }) {
   return Articulo(
     id: id,
@@ -45,6 +46,7 @@ Articulo crearArticulo({
     imagenUrl: imagenUrl,
     uidAutor: uidAutor,
     estado: estado,
+    creadoEn: creadoEn,
   );
 }
 
@@ -351,5 +353,64 @@ void main() {
     );
     expect(segunda.articulos.map((Articulo a) => a.id), <String>['f3']);
     expect(segunda.hayMas, isFalse);
+  });
+
+  test('insertar conserva la fecha de publicación', () async {
+    final DateTime fecha = DateTime(2026, 11, 23, 10, 30);
+    await repositorio.insertar(
+      crearArticulo(id: 'con-fecha', titulo: 'Reciente', creadoEn: fecha),
+    );
+
+    final Articulo? guardado =
+        await repositorio.obtenerPorId('con-fecha');
+
+    expect(guardado?.creadoEn, fecha);
+  });
+
+  test('buscarNovedades devuelve solo recientes disponibles y del filtro',
+      () async {
+    final DateTime ahora = DateTime(2026, 11, 23, 12);
+    await repositorio.insertar(
+      crearArticulo(
+        id: 'libro',
+        titulo: 'Libro nuevo',
+        categoria: Categoria.libros,
+        uidAutor: 'otro',
+        creadoEn: ahora,
+      ),
+    );
+    await repositorio.insertar(
+      crearArticulo(
+        id: 'tecno',
+        titulo: 'Tablet nueva',
+        categoria: Categoria.tecnologia,
+        uidAutor: 'otro',
+        creadoEn: ahora,
+      ),
+    );
+    await repositorio.insertar(
+      crearArticulo(
+        id: 'propio',
+        titulo: 'Lo mío',
+        uidAutor: 'yo',
+        creadoEn: ahora,
+      ),
+    );
+    await repositorio.insertar(
+      crearArticulo(
+        id: 'viejo',
+        titulo: 'Viejo',
+        uidAutor: 'otro',
+        creadoEn: ahora.subtract(const Duration(days: 30)),
+      ),
+    );
+
+    final List<Articulo> novedades = await repositorio.buscarNovedades(
+      desde: ahora.subtract(const Duration(days: 1)),
+      categorias: <Categoria>{Categoria.libros},
+      excluirUid: 'yo',
+    );
+
+    expect(novedades.map((Articulo a) => a.id), <String>['libro']);
   });
 }

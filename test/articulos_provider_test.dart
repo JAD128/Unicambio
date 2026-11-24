@@ -50,6 +50,7 @@ Articulo crearArticulo({
   bool esFavorito = false,
   String? uidAutor,
   EstadoPublicacion estado = EstadoPublicacion.disponible,
+  DateTime? creadoEn,
 }) {
   return Articulo(
     id: id,
@@ -62,6 +63,7 @@ Articulo crearArticulo({
     esFavorito: esFavorito,
     uidAutor: uidAutor,
     estado: estado,
+    creadoEn: creadoEn,
   );
 }
 
@@ -346,5 +348,76 @@ void main() {
       provider.articulos.firstWhere((Articulo a) => a.id == '1').estado,
       EstadoPublicacion.finalizado,
     );
+  });
+
+  test('cargarNovedades filtra fecha, categoría, estado y autor', () async {
+    final DateTime ahora = DateTime(2026, 11, 23, 12);
+    final ArticulosProvider novedades = ArticulosProvider(
+      ArticuloRepositorioMemoria(
+        iniciales: <Articulo>[
+          crearArticulo(
+            id: 'nuevo-libro',
+            titulo: 'Libro nuevo',
+            categoria: Categoria.libros,
+            uidAutor: 'otro',
+            creadoEn: ahora,
+          ),
+          crearArticulo(
+            id: 'nueva-tecno',
+            titulo: 'Tablet nueva',
+            categoria: Categoria.tecnologia,
+            uidAutor: 'otro',
+            creadoEn: ahora,
+          ),
+          crearArticulo(
+            id: 'propio',
+            titulo: 'Publicación propia',
+            uidAutor: 'yo',
+            creadoEn: ahora,
+          ),
+          crearArticulo(
+            id: 'finalizado',
+            titulo: 'Ya vendido',
+            uidAutor: 'otro',
+            estado: EstadoPublicacion.finalizado,
+            creadoEn: ahora,
+          ),
+          crearArticulo(
+            id: 'viejo',
+            titulo: 'Artículo viejo',
+            uidAutor: 'otro',
+            creadoEn: ahora.subtract(const Duration(days: 10)),
+          ),
+        ],
+      ),
+    );
+    novedades.configurarUsuario(uid: 'yo', nombre: 'Ana');
+
+    await novedades.cargarNovedades(
+      activas: true,
+      categorias: <Categoria>{Categoria.libros},
+      desde: ahora.subtract(const Duration(days: 2)),
+    );
+
+    expect(novedades.hayNovedades, isTrue);
+    expect(novedades.novedades.map((Articulo a) => a.id), <String>[
+      'nuevo-libro',
+    ]);
+  });
+
+  test('cargarNovedades con preferencia apagada limpia la bandeja', () async {
+    await provider.cargarNovedades(
+      activas: true,
+      categorias: Categoria.values.toSet(),
+      desde: DateTime(2020),
+    );
+
+    await provider.cargarNovedades(
+      activas: false,
+      categorias: const <Categoria>{},
+    );
+
+    expect(provider.novedades, isEmpty);
+    expect(provider.hayNovedades, isFalse);
   });
 }

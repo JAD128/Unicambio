@@ -62,6 +62,18 @@ abstract class ArticuloRepositorio {
     Object? cursor,
   });
 
+  /// Devuelve artículos recientes para las sugerencias dentro de la app.
+  ///
+  /// [desde] es la última vez que el usuario vio sugerencias; [categorias] son
+  /// sus preferencias y [excluirUid] evita sugerir las propias publicaciones.
+  /// Se aplica un [limite] porque es una bandeja, no una lista paginada.
+  Future<List<Articulo>> buscarNovedades({
+    required DateTime desde,
+    required Set<Categoria> categorias,
+    required String? excluirUid,
+    int limite = 20,
+  });
+
   /// Busca todos los artículos que coinciden con [texto] y [categoria].
   ///
   /// Se conserva para el código histórico y las pruebas; la app usa
@@ -286,6 +298,34 @@ class ArticuloRepositorioSqflite implements ArticuloRepositorio {
       cursor: desplazamiento + visibles.length,
       hayMas: hayMas,
     );
+  }
+
+  @override
+  Future<List<Articulo>> buscarNovedades({
+    required DateTime desde,
+    required Set<Categoria> categorias,
+    required String? excluirUid,
+    int limite = 20,
+  }) async {
+    final Database db = await _db;
+    final List<Map<String, Object?>> filas = await db.query(
+      BaseDatos.tablaArticulos,
+      where: 'creadoEn >= ?',
+      whereArgs: <Object?>[desde.toIso8601String()],
+      orderBy: 'creadoEn DESC, titulo ASC',
+    );
+    final List<Articulo> candidatos = filas
+        .map(Articulo.fromMap)
+        .where((Articulo articulo) =>
+            articulo.estado == EstadoPublicacion.disponible &&
+            (excluirUid == null || articulo.uidAutor != excluirUid) &&
+            (categorias.isEmpty || categorias.contains(articulo.categoria)))
+        .toList();
+    candidatos.sort((Articulo a, Articulo b) {
+      final int porFecha = b.fechaPublicacion.compareTo(a.fechaPublicacion);
+      return porFecha != 0 ? porFecha : a.titulo.compareTo(b.titulo);
+    });
+    return candidatos.take(limite).toList();
   }
 
   @override

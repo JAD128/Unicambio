@@ -3,7 +3,7 @@
 > Documento de contexto y bitácora. Léelo completo al retomar el trabajo para
 > no perder el hilo. Actualízalo al cerrar cada avance.
 
-Última actualización: cierre del **Avance 16 — estados de publicación**.
+Última actualización: cierre del **Avance 17 — WhatsApp opcional y sugerencias in-app**.
 Firebase/Google/ML Kit en iOS ya fueron validados en el iPhone.
 
 ---
@@ -40,6 +40,7 @@ Firebase/Google/ML Kit en iOS ya fueron validados en el iPhone.
 | 14 — Búsqueda avanzada | Filtros, orden, cursor y panel en Inicio | ✅ Hecho (67 pruebas) |
 | 15 — Paginación total | Sin `todos`: Inicio, Mis artículos y favoritos por cursor | ✅ Hecho (71 pruebas) |
 | 16 — Estados de publicación | `disponible`/`finalizado`, etiquetas y acciones | ✅ Hecho (73 pruebas) |
+| 17 — WhatsApp + sugerencias | Contacto opcional, compartir texto y novedades in-app | ✅ Hecho (86 pruebas) |
 
 > **Incidente del Avance 6**: al implementar la autenticación se reescribieron
 > `main.dart` y las pantallas usando datos de ejemplo estáticos
@@ -52,7 +53,7 @@ Verificación más reciente:
 
 ```bash
 flutter analyze   # -> No issues found!
-flutter test      # -> All tests passed!  (73 pruebas)
+flutter test      # -> All tests passed!  (86 pruebas)
 ```
 
 ---
@@ -73,6 +74,14 @@ flutter test      # -> All tests passed!  (73 pruebas)
   ML Kit detecta etiquetas y texto, y el formulario ofrece categoría, título,
   descripción y líneas de OCR. Cada campo se aplica solo si el usuario toca
   "Usar"/"Reemplazar"; nada se rellena automáticamente.
+- **WhatsApp opcional (Avance 17):** en Mi perfil se puede guardar un celular
+  colombiano autodeclarado (sin verificación). El detalle muestra "Abrir
+  WhatsApp" solo para publicaciones disponibles de otros usuarios; también se
+  puede compartir el artículo como texto por `wa.me`, sin dominio ni deep link.
+- **Sugerencias in-app (Avance 17):** interruptor apagado por defecto en Mi
+  perfil; al activarlo se seleccionan todas las categorías y Inicio muestra una
+  bandeja con publicaciones recientes. No hay FCM/APNs/push: solo se consulta
+  con la app abierta y se marca `ultimaVista` al abrir la bandeja.
 
 ## 3.1 Funcionalidades de la autenticación (Avance 6)
 
@@ -184,6 +193,7 @@ Proyecto_Unicambio/
 | `imagenUrl` | `String?` | URL pública en Supabase Storage; null si no tiene foto |
 | `uidAutor` | `String?` | `uid` de Firebase del autor; null en datos locales |
 | `estado` | `EstadoPublicacion` | `disponible` (default) o `finalizado` |
+| `creadoEn` | `DateTime?` | Fecha de publicación; `null` en artículos históricos |
 
 - `TipoPublicacion`: `venta`, `intercambio`, `regalo` (con etiqueta/icono/color).
 - `EstadoPublicacionUI.etiquetaPara(tipo)`: "Disponible" o, si finalizado,
@@ -191,11 +201,14 @@ Proyecto_Unicambio/
 - `Categoria`: `libros`, `apuntes`, `tecnologia`, `ropa`, `hogar`, `deportes`, `otros`.
 - `precioTexto`: regalo → "Gratis"; 0 → "A convenir"; resto → "$ N".
 - Serialización: enums como `.name`; `esFavorito` como 0/1 (SQLite no tiene bool);
-  `imagenUrl` y `uidAutor` son opcionales (null si no aplican). Los documentos
-  antiguos sin `estado` se leen como `disponible`.
+  `imagenUrl`, `uidAutor` y `creadoEn` son opcionales (null si no aplican). Los
+  documentos antiguos sin `estado` se leen como `disponible`; los que no tienen
+  `creadoEn` no aparecen en sugerencias. `fechaPublicacion` usa el epoch como
+  respaldo para comparar artículos históricos.
 
-**Tabla `articulos`** (creada en `base_datos.dart`, versión de esquema `4`; las
-migraciones agregan `imagenUrl` (v2), `uidAutor` (v3) y `estado` (v4)):
+**Tabla `articulos`** (creada en `base_datos.dart`, versión de esquema `5`; las
+migraciones agregan `imagenUrl` (v2), `uidAutor` (v3), `estado` (v4) y
+`creadoEn` (v5)):
 
 ```sql
 CREATE TABLE articulos (
@@ -209,7 +222,8 @@ CREATE TABLE articulos (
   esFavorito  INTEGER NOT NULL DEFAULT 0,
   imagenUrl   TEXT,
   uidAutor    TEXT,
-  estado      TEXT NOT NULL DEFAULT 'disponible'
+  estado      TEXT NOT NULL DEFAULT 'disponible',
+  creadoEn    TEXT
 )
 ```
 
@@ -225,7 +239,9 @@ Archivo de la BD: `unicambio.db` (vía `getDatabasesPath()`).
 `buscarPagina(consulta, {cursor})` → `PaginaArticulos(articulos, cursor,
 hayMas)`, `buscarPaginaFavoritos({limite, cursor})`,
 `buscar(texto, {categoria})` (histórico),
-`filtrarPorCategoria(categoria)`, `enTiempoReal` (getter) y `observarTodos()`
+`filtrarPorCategoria(categoria)`,
+`buscarNovedades({desde, categorias, excluirUid, limite})`, `enTiempoReal`
+(getter) y `observarTodos()`
 (stream en tiempo real; solo la nube lo implementa). `ConsultaArticulos` lleva
 texto, categoría, precio mínimo/máximo, orden, `uidAutor` y `limite` (12 en la
 UI); `firma` incluye `uidAutor` para no mezclar cachés de cuentas.
@@ -255,19 +271,37 @@ devuelve la URL pública. Configuración: `lib/config_supabase.dart`
   `cargando`, `cargandoMas`, `cargandoMis`, `cargandoMasMis`,
   `cargandoFavoritos`, `cargandoMasFavoritos`, `error`, `textoBusqueda`,
   `categoriaSeleccionada`, `precioMinimo`, `precioMaximo`, `orden`, `hayMas`,
-  `hayMasMis`, `hayMasFavoritos`, `listaVacia`, `articuloPorId(id)`,
-  `uidActual`, `vendedorActual`. Ya no existe `todos`.
+  `hayMasMis`, `hayMasFavoritos`, `novedades`, `hayNovedades`,
+  `cargandoNovedades`, `listaVacia`, `articuloPorId(id)`, `uidActual`,
+  `vendedorActual`. Ya no existe `todos`.
+
 - Métodos: `iniciar()`, `actualizarBusqueda(texto)`,
   `seleccionarCategoria(categoria?)`,
   `actualizarFiltros({precioMinimo, precioMaximo, orden})`, `limpiarFiltros()`,
   `cargarMas()`, `cargarMis()`, `cargarMasMis()`, `cargarFavoritos()`,
-  `cargarMasFavoritos()`, `refrescarArticulo(id)`, `insertar(a)`,
-  `actualizar(a)`, `cambiarEstado(id, estado)`, `eliminar(id)`,
-  `alternarFavorito(id)`, `configurarUsuario({uid, nombre?, correo?})`.
+  `cargarMasFavoritos()`, `cargarNovedades({activas, categorias, desde?})`,
+  `refrescarArticulo(id)`, `insertar(a)`, `actualizar(a)`,
+  `cambiarEstado(id, estado)`, `eliminar(id)`, `alternarFavorito(id)`,
+  `configurarUsuario({uid, nombre?, correo?})`.
+
 - Interno: `_recargarPagina()`, `_recargarMis()`, `_recargarFavoritos()` y
   `_ejecutar(...)` manejan `cargando`/`error`/`notifyListeners()`; tokens
   independientes descartan respuestas viejas al escribir rápido. `observarTodos()`
   solo invalida listas (deuda: aún lee la colección completa).
+
+**Perfil (Avance 17)**:
+- `PerfilRepositorio` (`lib/datos/perfil_repositorio.dart`): `obtener(uid)` y
+  `guardar(perfil)`. Implementaciones: `PerfilRepositorioNube` (usa
+  `usuarios/{uid}` con `set(merge: true)`) y `PerfilRepositorioMemoria`.
+- `PerfilProvider` (`lib/estado/perfil_provider.dart`): getters `perfil`,
+  `telefono`, `sugerenciasActivas`, `categoriasSugerencias`, `ultimaVista`,
+  `cargando`, `error`; métodos `iniciar(uid)`, `guardarTelefono(texto)`,
+  `actualizarPreferencias({activas, categorias})`, `marcarVisto()`,
+  `telefonoDe(uid)` y `limpiar()`.
+- `LanzadorWhatsapp` (`lib/datos/lanzador_whatsapp.dart`): `contactar` y
+  `compartir` con `url_launcher`; `LanzadorWhatsappUrl` es la app real y se
+  puede sustituir por un fake en pruebas. `normalizarTelefonoColombiano`
+  acepta 10 dígitos o 12 con `57`.
 
 **`BaseDatos`** (singleton): `BaseDatos.instancia.db`, `.cerrar()`, `.eliminar()`.
 
@@ -297,14 +331,19 @@ ML Kit queda pendiente en un teléfono/emulador.
 
 ---
 
-## 9. Pruebas (73 en total)
+## 9. Pruebas (86 en total)
 
-- `articulo_repositorio_test.dart` (18): usa `sqflite_common_ffi`
+- `articulo_repositorio_test.dart` (20): usa `sqflite_common_ffi`
   (`sqfliteFfiInit()` + `databaseFactory = databaseFactoryFfi`) y prueba el
   repositorio REAL. Limpia la BD en `setUp` con `BaseDatos.instancia.eliminar()`.
-- `articulos_provider_test.dart` (17): usa `ArticuloRepositorioMemoria` y un
-  fake con `StreamController` para el tiempo real; incluye filtros, páginas y
-  el filtro `mios`.
+- `articulos_provider_test.dart` (19): usa `ArticuloRepositorioMemoria` y un
+  fake con `StreamController` para el tiempo real; incluye filtros, páginas,
+  el filtro `mios` y las novedades.
+- `perfil_provider_test.dart` (5): teléfono opcional normalizado, rechazo de
+  números inválidos, preferencias por defecto, todas las categorías al activar,
+  `ultimaVista` y caché del teléfono de otros vendedores.
+- `lanzador_whatsapp_test.dart` (3): normalización de celulares colombianos y
+  construcción de URIs `wa.me` sin abrir la app externa.
 - `almacenamiento_imagenes_test.dart` (5): subida/borrado en Supabase con
   `MockClient` (URL, cabeceras, error HTTP, configuración faltante y enlaces
   ajenos).
@@ -324,8 +363,9 @@ ML Kit queda pendiente en un teléfono/emulador.
   conservación del resultado ML Kit cuando el proxy falla.
 - `sugeridor_publicacion_llm_test.dart` (2): prioridad del LLM y respaldo al
   sugeridor local.
-- `widget_test.dart` (2): smoke tests de UI; envuelven pantallas con el provider
-  y el repositorio en memoria.
+- `widget_test.dart` (3): smoke tests de UI; envuelven pantallas con ambos
+  providers en memoria y comprueban contacto/compartir por WhatsApp con un
+  lanzador falso.
 
 > Nota: las pruebas de widgets usan el repositorio en memoria porque SQLite no
 > corre en el entorno de test sin ffi.
@@ -541,9 +581,34 @@ ML Kit queda pendiente en un teléfono/emulador.
   crear/actualizar. No hay caducidad ni filtro por estado en Inicio.
 - Verificación: `flutter analyze` limpio, `flutter test` (73).
 
+### Avance 17 — WhatsApp opcional y sugerencias in-app ✅ HECHO
+- `Articulo.creadoEn` (SQLite v5, `serverTimestamp()` en Firestore) permite
+  consultar publicaciones recientes. `buscarNovedades({desde, categorias,
+  excluirUid, limite})` filtra fecha en Firestore con un índice de un campo;
+  categoría, estado y autor se filtran en Dart (sin índices compuestos nuevos).
+- `usuarios/{uid}` guarda `telefono` (opcional y autodeclarado),
+  `sugerenciasActivas` (default `false`), `categoriasSugerencias` (todas al
+  activar por primera vez) y `ultimaVista`. Se escribe con `set(merge: true)`
+  para no tocar la subcolección `favoritos`.
+- `PerfilRepositorio`/`PerfilProvider` y `MultiProvider` en `main.dart`.
+  El número se normaliza a `57...`; en Mi perfil se ve completo y se avisa que
+  no está verificado. `firestore.rules` permite leer cualquier perfil con
+  sesión y escribir solo el propio.
+- El detalle abre `https://wa.me/<numero>?text=...` solo si la publicación está
+  disponible y es de otro usuario; "Compartir" usa `https://wa.me/?text=...`.
+  No hay dominio propio ni deep links. `LanzadorWhatsapp` abstrae
+  `url_launcher` para pruebas.
+- Inicio muestra una bandeja con las novedades; al abrirla se llama a
+  `marcarVisto()`. No hay FCM/APNs/Cloud Functions: si la app está cerrada no
+  hay aviso. La verificación SMS y las notificaciones push quedan para después.
+- Verificación: `flutter analyze` limpio, `flutter test` (86), builds de APK y
+  web y `git diff --check` correctos.
+
 ### Backlog de mejoras (prioridad por definir)
-- **Chat / contacto al vendedor**: el botón hoy solo muestra un SnackBar.
-- **Notificaciones**: la campana es decorativa.
+- **Chat propio / verificación SMS (Firebase Phone Auth)**: hoy se usa WhatsApp
+  con un número autodeclarado; no hay OTP ni identidad verificada.
+- **Notificaciones push**: ya hay bandeja dentro de la app, pero falta FCM/APNs
+  (y configuración APNs en iOS) para avisar con la app cerrada.
 - **Validaciones extra** en el formulario (longitud, precio máximo) y manejo de
   zonas seguras.
 - **Accesibilidad** (semántica, contraste) e **internacionalización** (i18n).
@@ -853,3 +918,24 @@ Verificación final: `flutter analyze` → `No issues found!`, `flutter test` �
 - Verificación: `flutter analyze` → `No issues found!`, `flutter test` →
   `All tests passed!` (73), builds de APK y web y `git diff --check` correctos.
   Este cierre agrupa los Avances 14, 15 y 16.
+
+## Actualización — Avance 17: WhatsApp opcional y sugerencias in-app
+
+- Se añadió `url_launcher` para abrir `wa.me` en Android, iOS y Chrome/web. La
+  UI depende de `LanzadorWhatsapp`, así que las pruebas usan un fake.
+- `creadoEn` llega a SQLite v5 y a Firestore con `FieldValue.serverTimestamp()`
+  al crear. Al actualizar se conserva la fecha original. Las publicaciones
+  históricas (sin fecha) quedan fuera de la bandeja de novedades.
+- El perfil del usuario vive en `usuarios/{uid}` junto a sus favoritos. El
+  teléfono es opcional, se guarda como `57...` y solo se muestra completo en Mi
+  perfil; los demás usuarios lo leen para armar el enlace de WhatsApp.
+- Las preferencias de sugerencias son locales a Firestore (por usuario), con
+  todas las categorías activadas al encender el interruptor por primera vez.
+  `ArticulosProvider.cargarNovedades` consulta la bandeja y `PerfilProvider`
+  registra `ultimaVista` al abrirla.
+- No se agregaron índices compuestos: la consulta de novedades filtra por fecha
+  en Firestore y aplica el resto de los filtros en Dart sobre un lote acotado.
+- Las reglas de `usuarios/{uid}` se desplegaron con
+  `firebase deploy --only firestore:rules --project unicambio-2f543`.
+- Verificación: `flutter analyze` → `No issues found!`, `flutter test` →
+  `All tests passed!` (86), builds de APK y web y `git diff --check` correctos.

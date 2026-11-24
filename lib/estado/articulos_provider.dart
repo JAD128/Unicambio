@@ -50,6 +50,9 @@ class ArticulosProvider extends ChangeNotifier {
   /// Página de artículos marcados como favoritos.
   List<Articulo> _favoritos = <Articulo>[];
 
+  /// Artículos recientes listos para sugerir dentro de la app.
+  List<Articulo> _novedades = <Articulo>[];
+
   /// Detalles consultados por id (evita volver a leer el mismo documento).
   final Map<String, Articulo> _cacheDetalle = <String, Articulo>{};
 
@@ -94,11 +97,13 @@ class ArticulosProvider extends ChangeNotifier {
   /// `true` mientras se carga la primera página de cada lista.
   bool _cargandoMis = false;
   bool _cargandoFavoritos = false;
+  bool _cargandoNovedades = false;
 
   /// Contadores para descartar respuestas viejas de cada lista.
   int _tokenPagina = 0;
   int _tokenMis = 0;
   int _tokenFavoritos = 0;
+  int _tokenNovedades = 0;
 
   /// Escucha de cambios en tiempo real (solo si el repositorio la soporta).
   StreamSubscription<List<Articulo>>? _suscripcion;
@@ -125,6 +130,15 @@ class ArticulosProvider extends ChangeNotifier {
 
   /// Página de artículos favoritos.
   List<Articulo> get favoritos => UnmodifiableListView<Articulo>(_favoritos);
+
+  /// Artículos nuevos para mostrar en la bandeja de sugerencias.
+  List<Articulo> get novedades => UnmodifiableListView<Articulo>(_novedades);
+
+  /// `true` cuando hay al menos una sugerencia sin ver.
+  bool get hayNovedades => _novedades.isNotEmpty;
+
+  /// `true` mientras se consultan las sugerencias.
+  bool get cargandoNovedades => _cargandoNovedades;
 
   /// Indica si hay una operación principal en curso (spinner de pantalla).
   bool get cargando => _cargando;
@@ -427,6 +441,49 @@ class ArticulosProvider extends ChangeNotifier {
     }
   }
 
+  /// Carga sugerencias recientes según las preferencias del perfil.
+  ///
+  /// No es una notificación push: solo se consulta mientras la app está abierta.
+  /// Sin [desde] se usa una ventana de 7 días para la primera activación.
+  Future<void> cargarNovedades({
+    required bool activas,
+    required Set<Categoria> categorias,
+    DateTime? desde,
+  }) async {
+    if (!activas) {
+      _tokenNovedades++;
+      _novedades = <Articulo>[];
+      _cargandoNovedades = false;
+      notifyListeners();
+      return;
+    }
+
+    final int token = ++_tokenNovedades;
+    _cargandoNovedades = true;
+    notifyListeners();
+    try {
+      final DateTime fecha = desde ??
+          DateTime.now().subtract(const Duration(days: 7));
+      final List<Articulo> encontradas = await _repositorio.buscarNovedades(
+        desde: fecha,
+        categorias: categorias,
+        excluirUid: _uidActual,
+        limite: 8,
+      );
+      if (token != _tokenNovedades || _destruido) return;
+      _novedades = encontradas;
+    } catch (error) {
+      if (token == _tokenNovedades && !_destruido) {
+        _error = _mensajeDeError(error);
+      }
+    } finally {
+      if (token == _tokenNovedades && !_destruido) {
+        _cargandoNovedades = false;
+        notifyListeners();
+      }
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Operaciones sobre los artículos (CRUD + favoritos)
   // ---------------------------------------------------------------------------
@@ -642,6 +699,7 @@ class ArticulosProvider extends ChangeNotifier {
     _tokenPagina++;
     _tokenMis++;
     _tokenFavoritos++;
+    _tokenNovedades++;
     _suscripcion?.cancel();
     super.dispose();
   }

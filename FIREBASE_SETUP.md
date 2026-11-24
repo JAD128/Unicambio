@@ -218,3 +218,22 @@ sigue usando `context.read<ArticulosProvider>()` para guardar. No hay cambios en
 `main.dart` ni en las demás pantallas. La descripción del LLM se muestra solo
 mientras el tipo de publicación no cambie; si cambia, se recalcula con
 `PlantillaGeneradorDescripcion`.
+
+## Reglas para el perfil (Avance 17)
+
+`firestore.rules` incluye ahora `match /usuarios/{uid}`:
+
+- Cualquier usuario **autenticado** puede leer el documento para obtener el
+  teléfono público del vendedor y armar el enlace `wa.me`.
+- Solo el dueño (`request.auth.uid == uid`) puede escribir `telefono`,
+  `sugerenciasActivas`, `categoriasSugerencias` y `ultimaVista`.
+
+La app usa `set(..., SetOptions(merge: true))`, así que no sobrescribe la
+subcolección `favoritos`. Despliega las reglas con:
+
+```bash
+firebase deploy --only firestore:rules --project unicambio-2f543
+```
+
+No hay índices compuestos nuevos: `buscarNovedades` filtra por `creadoEn` en
+Firestore y aplica categoría/estado/autor en Dart sobre un lote acotado.

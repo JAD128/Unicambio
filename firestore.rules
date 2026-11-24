@@ -24,6 +24,13 @@ service cloud.firestore {
         && resource.data.uidAutor == request.auth.uid;
     }
 
+    // Perfil: cualquier usuario autenticado puede leer el teléfono público
+    // para armar un enlace de WhatsApp; solo el dueño puede escribirlo.
+    match /usuarios/{uid} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+
     // Favoritos: cada usuario solo puede leer y modificar los suyos.
     match /usuarios/{uid}/favoritos/{articuloId} {
       allow read, write: if request.auth != null

@@ -105,14 +105,21 @@ class ArticuloRepositorioNube implements ArticuloRepositorio {
   @override
   Future<void> insertar(Articulo articulo) async {
     // El id del modelo (con hora) se ignora: Firestore asigna uno propio.
-    await _articulos.add(_aMapa(articulo));
+    await _articulos.add(
+      _aMapa(articulo, creadoEn: FieldValue.serverTimestamp()),
+    );
   }
 
   @override
   Future<void> actualizar(Articulo articulo) async {
     // Actualiza los datos; el id del documento ya coincide con articulo.id
     // porque al leer lo construimos con el id real de Firestore.
-    await _articulos.doc(articulo.id).update(_aMapa(articulo));
+    final Object? creadoEn = articulo.creadoEn == null
+        ? null
+        : Timestamp.fromDate(articulo.creadoEn!);
+    await _articulos.doc(articulo.id).update(
+          _aMapa(articulo, creadoEn: creadoEn),
+        );
   }
 
   @override
@@ -285,6 +292,32 @@ class ArticuloRepositorioNube implements ArticuloRepositorio {
   }
 
   @override
+  Future<List<Articulo>> buscarNovedades({
+    required DateTime desde,
+    required Set<Categoria> categorias,
+    required String? excluirUid,
+    int limite = 20,
+  }) async {
+    if (limite <= 0) return <Articulo>[];
+
+    // Solo el rango de fecha se filtra en Firestore (índice de un campo).
+    // Categoría, estado y autor se filtran en Dart para no exigir índices
+    // compuestos nuevos.
+    final QuerySnapshot<Map<String, dynamic>> datos = await _articulos
+        .where('creadoEn', isGreaterThan: Timestamp.fromDate(desde))
+        .orderBy('creadoEn', descending: true)
+        .limit(limite * 3)
+        .get();
+    return _desdeSnapshots(datos)
+        .where((Articulo articulo) =>
+            articulo.estado == EstadoPublicacion.disponible &&
+            (excluirUid == null || articulo.uidAutor != excluirUid) &&
+            (categorias.isEmpty || categorias.contains(articulo.categoria)))
+        .take(limite)
+        .toList();
+  }
+
+  @override
   Future<List<Articulo>> filtrarPorCategoria(Categoria categoria) =>
       buscar('', categoria: categoria);
 
@@ -299,6 +332,12 @@ class ArticuloRepositorioNube implements ArticuloRepositorio {
   /// Convierte un documento en un [Articulo], usando el id real de Firestore.
   Articulo _desdeSnapshot(DocumentSnapshot<Map<String, dynamic>> doc) {
     final Map<String, dynamic> datos = doc.data()!;
+    final Object? fecha = datos['creadoEn'];
+    final DateTime? creadoEn = fecha is Timestamp
+        ? fecha.toDate()
+        : fecha is String
+            ? DateTime.tryParse(fecha)
+            : null;
     return Articulo(
       id: doc.id,
       titulo: datos['titulo'] as String,
@@ -314,6 +353,7 @@ class ArticuloRepositorioNube implements ArticuloRepositorio {
             valor.name == (datos['estado'] as String? ?? 'disponible'),
         orElse: () => EstadoPublicacion.disponible,
       ),
+      creadoEn: creadoEn,
     );
   }
 
@@ -321,17 +361,21 @@ class ArticuloRepositorioNube implements ArticuloRepositorio {
   ///
   /// No guardamos `esFavorito` (es por usuario) ni el id (lo asigna Firestore).
   /// `imagenUrl` se guarda como null al quitar la foto, para borrar el campo.
-  Map<String, Object?> _aMapa(Articulo articulo) => <String, Object?>{
-        'titulo': articulo.titulo,
-        'descripcion': articulo.descripcion,
-        'precio': articulo.precio,
-        'categoria': articulo.categoria.name,
-        'tipo': articulo.tipo.name,
-        'vendedor': articulo.vendedor,
-        'imagenUrl': articulo.imagenUrl,
-        'uidAutor': _auth.currentUser?.uid ?? '',
-        'estado': articulo.estado.name,
-      };
+  Map<String, Object?> _aMapa(Articulo articulo, {Object? creadoEn}) {
+    final Map<String, Object?> mapa = <String, Object?>{
+      'titulo': articulo.titulo,
+      'descripcion': articulo.descripcion,
+      'precio': articulo.precio,
+      'categoria': articulo.categoria.name,
+      'tipo': articulo.tipo.name,
+      'vendedor': articulo.vendedor,
+      'imagenUrl': articulo.imagenUrl,
+      'uidAutor': _auth.currentUser?.uid ?? '',
+      'estado': articulo.estado.name,
+    };
+    if (creadoEn != null) mapa['creadoEn'] = creadoEn;
+    return mapa;
+  }
 
   /// Devuelve los ids marcados como favorito por el usuario actual.
   Future<Set<String>> _idsFavoritos() async {

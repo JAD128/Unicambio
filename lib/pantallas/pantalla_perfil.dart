@@ -15,6 +15,8 @@ import 'package:provider/provider.dart';
 
 import '../datos/almacenamiento_imagenes.dart';
 import '../estado/articulos_provider.dart';
+import '../estado/perfil_provider.dart';
+import '../modelos/categoria.dart';
 
 /// Pantalla "Mi perfil".
 class PantallaPerfil extends StatefulWidget {
@@ -29,6 +31,9 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
 
   /// `true` mientras se sube/borra la foto o se guarda el nombre.
   bool _guardando = false;
+
+  /// Evita pedir dos veces el mismo perfil al abrir la pantalla.
+  bool _perfilSolicitado = false;
 
   /// Usuario actual de Firebase (null si ya se cerró la sesión).
   User? get _usuario => FirebaseAuth.instance.currentUser;
@@ -45,6 +50,39 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
   String get _inicial =>
       _nombre.isEmpty ? '?' : _nombre.substring(0, 1).toUpperCase();
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _cargarPerfil());
+  }
+
+  /// Carga el perfil si la pantalla se abre directamente (no desde el gate).
+  Future<void> _cargarPerfil() async {
+    if (_perfilSolicitado) return;
+    final String? uid = _usuario?.uid;
+    if (uid == null) return;
+    _perfilSolicitado = true;
+    if (!mounted) return;
+    await context.read<PerfilProvider>().iniciar(uid);
+  }
+
+  /// Muestra un mensaje corto al guardar una preferencia.
+  void _avisar(String mensaje) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(mensaje)),
+    );
+  }
+
+  /// Pide otra vez las sugerencias después de cambiar preferencias.
+  Future<void> _recargarNovedades(PerfilProvider perfil) async {
+    await context.read<ArticulosProvider>().cargarNovedades(
+          activas: perfil.sugerenciasActivas,
+          categorias: perfil.categoriasSugerencias,
+          desde: perfil.ultimaVista,
+        );
+  }
+
   /// Guarda los datos de la sesión en el provider para que el saludo y las
   /// nuevas publicaciones usen el nombre actualizado.
   void _sincronizarProvider() {
@@ -55,6 +93,113 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
           nombre: usuario.displayName,
           correo: usuario.email,
         );
+  }
+
+  /// Edita el número de WhatsApp opcional (autodeclarado, sin verificación).
+  Future<void> _editarTelefono(PerfilProvider perfil) async {
+    final TextEditingController controlador = TextEditingController(
+      text: perfil.telefono.startsWith('57')
+          ? perfil.telefono.substring(2)
+          : perfil.telefono,
+    );
+    final String? nuevo = await showDialog<String>(
+      context: context,
+      builder: (BuildContext contexto) => AlertDialog(
+        title: const Text('WhatsApp (opcional)'),
+        content: TextField(
+          controller: controlador,
+          autofocus: true,
+          keyboardType: TextInputType.phone,
+          decoration: const InputDecoration(
+            labelText: 'Celular a 10 dígitos',
+            prefixText: '+57 ',
+            helperText:
+                'Solo para que otros estudiantes puedan escribirte. No verificado.',
+            helperMaxLines: 2,
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(contexto).pop(),
+            child: const Text('Cancelar'),
+          ),
+          if (perfil.telefono.isNotEmpty)
+            TextButton(
+              onPressed: () => Navigator.of(contexto).pop(''),
+              child: const Text('Quitar'),
+            ),
+          FilledButton(
+            onPressed: () => Navigator.of(contexto).pop(controlador.text.trim()),
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+    if (nuevo == null) return;
+
+    await perfil.guardarTelefono(nuevo);
+    if (!mounted) return;
+    if (perfil.error != null) {
+      _avisar(perfil.error!);
+      return;
+    }
+    await _recargarNovedades(perfil);
+    _avisar(nuevo.isEmpty ? 'Número quitado.' : 'Número guardado.');
+  }
+
+  /// Elige las categorías que se verán en las sugerencias.
+  Future<void> _editarCategorias(PerfilProvider perfil) async {
+    final Set<Categoria> seleccionadas =
+        Set<Categoria>.from(perfil.categoriasSugerencias);
+    final Set<Categoria>? resultado = await showDialog<Set<Categoria>>(
+      context: context,
+      builder: (BuildContext contexto) => StatefulBuilder(
+        builder: (BuildContext contexto, StateSetter actualizar) => AlertDialog(
+          title: const Text('Categorías sugeridas'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                const Text('Elige al menos una categoría.'),
+                ...Categoria.values.map(
+                  (Categoria categoria) => CheckboxListTile(
+                    value: seleccionadas.contains(categoria),
+                    title: Text(categoria.etiqueta),
+                    onChanged: (bool? marcado) => actualizar(() {
+                      if (marcado == true) {
+                        seleccionadas.add(categoria);
+                      } else {
+                        seleccionadas.remove(categoria);
+                      }
+                    }),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(contexto).pop(),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(contexto).pop(seleccionadas),
+              child: const Text('Guardar'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (resultado == null) return;
+    if (resultado.isEmpty) {
+      _avisar('Elige al menos una categoría.');
+      return;
+    }
+
+    await perfil.actualizarPreferencias(categorias: resultado);
+    if (!mounted) return;
+    await _recargarNovedades(perfil);
+    _avisar('Categorías actualizadas.');
   }
 
   /// Abre un diálogo para editar el nombre visible.
@@ -238,6 +383,7 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
   Widget build(BuildContext context) {
     final ThemeData tema = Theme.of(context);
     final ArticulosProvider proveedor = context.watch<ArticulosProvider>();
+    final PerfilProvider perfil = context.watch<PerfilProvider>();
     final String? foto = _usuario?.photoURL;
 
     return Scaffold(
@@ -331,6 +477,65 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 24),
+
+          // ------------------- WhatsApp y sugerencias -----------------
+          Card(
+            child: Column(
+              children: <Widget>[
+                ListTile(
+                  leading: const Icon(Icons.chat_bubble_outline),
+                  title: const Text('WhatsApp (opcional)'),
+                  subtitle: Text(
+                    perfil.telefono.isEmpty
+                        ? 'Agrega tu número para que te puedan contactar'
+                        : '+${perfil.telefono} · No verificado',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: perfil.cargando
+                      ? null
+                      : () => _editarTelefono(perfil),
+                ),
+                const Divider(height: 1),
+                SwitchListTile(
+                  secondary: const Icon(Icons.notifications_none_outlined),
+                  title: const Text('Sugerencias en la app'),
+                  subtitle: const Text(
+                    'Avisos de nuevos artículos solo mientras la app está abierta.',
+                  ),
+                  value: perfil.sugerenciasActivas,
+                  onChanged: perfil.cargando
+                      ? null
+                      : (bool valor) async {
+                          await perfil.actualizarPreferencias(activas: valor);
+                          if (!mounted) return;
+                          await _recargarNovedades(perfil);
+                          _avisar(
+                            valor
+                                ? 'Sugerencias activadas para todas las categorías.'
+                                : 'Sugerencias desactivadas.',
+                          );
+                        },
+                ),
+                if (perfil.sugerenciasActivas)
+                  ListTile(
+                    leading: const Icon(Icons.category_outlined),
+                    title: const Text('Categorías sugeridas'),
+                    subtitle: Text(
+                      perfil.categoriasSugerencias.isEmpty
+                          ? 'Ninguna categoría elegida'
+                          : perfil.categoriasSugerencias
+                              .map((Categoria c) => c.etiqueta)
+                              .join(', '),
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: perfil.cargando
+                        ? null
+                        : () => _editarCategorias(perfil),
+                  ),
+              ],
+            ),
           ),
           const SizedBox(height: 24),
 

@@ -11,16 +11,35 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../datos/lanzador_whatsapp.dart';
 import '../estado/articulos_provider.dart';
+import '../estado/perfil_provider.dart';
 import '../modelos/articulo.dart';
 import '../modelos/categoria.dart';
+
+/// Texto prellenado para escribir al vendedor.
+String textoContactoVendedor(Articulo articulo) =>
+    'Hola, vi "${articulo.titulo}" (${articulo.precioTexto}) en UniCambio. '
+    '¿Sigue disponible?';
+
+/// Texto para compartir la publicación por WhatsApp (sin enlaces).
+String textoCompartirArticulo(Articulo articulo) =>
+    'Mira "${articulo.titulo}" (${articulo.precioTexto}) en UniCambio: '
+    '${articulo.descripcion}';
 
 /// Pantalla de detalle. Recibe el [articulo] que se quiere mostrar.
 class PantallaDetalleArticulo extends StatefulWidget {
   /// Artículo que se muestra en el detalle.
   final Articulo articulo;
 
-  const PantallaDetalleArticulo({super.key, required this.articulo});
+  /// Lanzador inyectable para probar los botones sin abrir WhatsApp.
+  final LanzadorWhatsapp lanzador;
+
+  const PantallaDetalleArticulo({
+    super.key,
+    required this.articulo,
+    LanzadorWhatsapp? lanzador,
+  }) : lanzador = lanzador ?? const LanzadorWhatsappUrl();
 
   @override
   State<PantallaDetalleArticulo> createState() =>
@@ -28,21 +47,58 @@ class PantallaDetalleArticulo extends StatefulWidget {
 }
 
 class _PantallaDetalleArticuloState extends State<PantallaDetalleArticulo> {
+  /// WhatsApp del vendedor, si decidió compartirlo en su perfil.
+  String? _telefonoVendedor;
+
+  /// `true` mientras se consulta el perfil del vendedor.
+  bool _cargandoTelefono = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       context.read<ArticulosProvider>().refrescarArticulo(widget.articulo.id);
+      _cargarTelefonoVendedor();
     });
+  }
+
+  /// Lee de forma asíncrona el número público del autor del artículo.
+  Future<void> _cargarTelefonoVendedor() async {
+    final ArticulosProvider articulos = context.read<ArticulosProvider>();
+    final Articulo actual =
+        articulos.articuloPorId(widget.articulo.id) ?? widget.articulo;
+    final String? uid = actual.uidAutor;
+    if (uid == null || uid == articulos.uidActual) return;
+
+    setState(() => _cargandoTelefono = true);
+    final String? telefono =
+        await context.read<PerfilProvider>().telefonoDe(uid);
+    if (!mounted) return;
+    setState(() {
+      _telefonoVendedor = telefono;
+      _cargandoTelefono = false;
+    });
+  }
+
+  /// Muestra el resultado de intentar abrir WhatsApp.
+  void _avisar(bool abierto, String mensaje) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(abierto ? mensaje : 'No se pudo abrir WhatsApp.'),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final ThemeData tema = Theme.of(context);
+    final ArticulosProvider proveedor = context.watch<ArticulosProvider>();
     final Articulo actual =
-        context.watch<ArticulosProvider>().articuloPorId(widget.articulo.id) ??
-            widget.articulo;
+        proveedor.articuloPorId(widget.articulo.id) ?? widget.articulo;
+    final bool esPropio = actual.uidAutor != null &&
+        actual.uidAutor == proveedor.uidActual;
 
     return Scaffold(
       appBar: AppBar(
@@ -151,30 +207,116 @@ class _PantallaDetalleArticuloState extends State<PantallaDetalleArticulo> {
         ),
       ),
 
-      // Botón fijo en la parte inferior para contactar al vendedor.
+      // Acciones fijas: compartir y contactar por WhatsApp (opcional).
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: FilledButton.icon(
-            key: const Key('contactar-vendedor'),
-            onPressed: actual.estado == EstadoPublicacion.finalizado
-                ? null
-                : () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('El chat con el vendedor llegará pronto.'),
-                      ),
-                    );
-                  },
-            icon: const Icon(Icons.chat_bubble_outline),
-            label: Text(
-              actual.estado == EstadoPublicacion.finalizado
-                  ? 'Publicación finalizada'
-                  : 'Contactar al vendedor',
-            ),
+          child: _AccionesDetalle(
+            esPropio: esPropio,
+            finalizado: actual.estado == EstadoPublicacion.finalizado,
+            cargandoTelefono: _cargandoTelefono,
+            telefonoVendedor: _telefonoVendedor,
+            alCompartir: () async {
+              final bool abierto =
+                  await widget.lanzador.compartir(textoCompartirArticulo(actual));
+              _avisar(abierto, 'WhatsApp abierto para compartir.');
+            },
+            alContactar: () async {
+              final String? telefono = _telefonoVendedor;
+              if (telefono == null) return;
+              final bool abierto = await widget.lanzador.contactar(
+                telefono: telefono,
+                mensaje: textoContactoVendedor(actual),
+              );
+              _avisar(abierto, 'WhatsApp abierto con el mensaje listo.');
+            },
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Botones inferiores del detalle, según el estado y la propiedad.
+class _AccionesDetalle extends StatelessWidget {
+  const _AccionesDetalle({
+    required this.esPropio,
+    required this.finalizado,
+    required this.cargandoTelefono,
+    required this.telefonoVendedor,
+    required this.alCompartir,
+    required this.alContactar,
+  });
+
+  final bool esPropio;
+  final bool finalizado;
+  final bool cargandoTelefono;
+  final String? telefonoVendedor;
+  final VoidCallback alCompartir;
+  final VoidCallback alContactar;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData tema = Theme.of(context);
+    if (esPropio || finalizado) {
+      return SizedBox(
+        width: double.infinity,
+        child: FilledButton.icon(
+          key: const Key('contactar-vendedor'),
+          onPressed: null,
+          icon: Icon(esPropio ? Icons.person_outline : Icons.lock_outline),
+          label: Text(
+            esPropio ? 'Tu publicación' : 'Publicación finalizada',
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: OutlinedButton.icon(
+                key: const Key('compartir-whatsapp'),
+                onPressed: alCompartir,
+                icon: const Icon(Icons.share_outlined),
+                label: const Text('Compartir'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: FilledButton.icon(
+                key: const Key('contactar-vendedor'),
+                onPressed:
+                    cargandoTelefono || telefonoVendedor == null
+                        ? null
+                        : alContactar,
+                icon: const Icon(Icons.chat_bubble_outline),
+                label: Text(
+                  cargandoTelefono
+                      ? 'Buscando...'
+                      : telefonoVendedor == null
+                          ? 'Sin WhatsApp'
+                          : 'Abrir WhatsApp',
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (telefonoVendedor == null && !cargandoTelefono)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              'El vendedor no compartió su número de WhatsApp.',
+              textAlign: TextAlign.center,
+              style: tema.textTheme.bodySmall?.copyWith(
+                color: tema.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

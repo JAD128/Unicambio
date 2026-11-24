@@ -176,6 +176,27 @@ class ArticuloRepositorioMemoria implements ArticuloRepositorio {
   }
 
   @override
+  Future<List<Articulo>> buscarNovedades({
+    required DateTime desde,
+    required Set<Categoria> categorias,
+    required String? excluirUid,
+    int limite = 20,
+  }) async {
+    final List<Articulo> candidatos = _articulos.where((Articulo articulo) {
+      return articulo.creadoEn != null &&
+          !articulo.creadoEn!.isBefore(desde) &&
+          articulo.estado == EstadoPublicacion.disponible &&
+          (excluirUid == null || articulo.uidAutor != excluirUid) &&
+          (categorias.isEmpty || categorias.contains(articulo.categoria));
+    }).toList();
+    candidatos.sort((Articulo a, Articulo b) {
+      final int porFecha = b.fechaPublicacion.compareTo(a.fechaPublicacion);
+      return porFecha != 0 ? porFecha : a.titulo.compareTo(b.titulo);
+    });
+    return candidatos.take(limite).toList();
+  }
+
+  @override
   Future<List<Articulo>> filtrarPorCategoria(Categoria categoria) =>
       buscar('', categoria: categoria);
 }

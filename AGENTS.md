@@ -14,7 +14,7 @@ cada avance.
 ```bash
 flutter pub get   # tras tocar pubspec.yaml
 flutter analyze   # -> No issues found!
-flutter test      # -> All tests passed!  (73 pruebas)
+flutter test      # -> All tests passed!  (86 pruebas)
 ```
 
 No hay CI de pruebas: `analyze` + `test` son la única verificación local.
@@ -64,15 +64,26 @@ Pantallas --context.watch/read--> ArticulosProvider (ChangeNotifier)
   actualiza el detalle por id. `observarTodos()` sigue vivo como señal de
   invalidación en tiempo real (deuda conocida: aún lee la colección completa).
 - **Estados de publicación (Avance 16):** `Articulo.estado` usa
-  `EstadoPublicacion.disponible|finalizado` (SQLite v4, valor por defecto
+   `EstadoPublicacion.disponible|finalizado` (SQLite v5, valor por defecto
+
   `disponible`). La etiqueta depende del tipo: `Disponible`, `Vendido`,
   `Intercambiado` o `Entregado`. `provider.cambiarEstado(id, estado)` es la
   única vía de cambio; "Mis artículos" tiene la acción y el detalle desactiva
-  "Contactar al vendedor" cuando está finalizado. No hay caducidad ni filtro
-  por estado en Inicio.
+   "Contactar al vendedor" cuando está finalizado. No hay caducidad ni filtro
+   por estado en Inicio.
+- **WhatsApp + sugerencias in-app (Avance 17):** `url_launcher` abre `wa.me`;
+   el número es opcional, autodeclarado, se guarda en `usuarios/{uid}` y solo
+   se muestra completo en Mi perfil. El detalle contacta/Comparte solo texto
+   (sin dominio ni deep link) y solo si está disponible y no es propio.
+   `PerfilProvider` + `ArticulosProvider.cargarNovedades` gestionan la bandeja;
+   toggle apagado por defecto y todas las categorías al activar. No hay
+      FCM/APNs/push ni verificación SMS; eso queda para otro avance.
+ Elaborado con
+   `LanzadorWhatsapp` inyectable y SQLite v5 (`creadoEn`).
+
 - Las fotos viven en **Supabase Storage** (`AlmacenamientoImagenes`, API REST
   con `http`) y la URL en `Articulo.imagenUrl` (Firestore y SQLite, esquema
-  v4; `uidAutor` desde v3). Las credenciales van en `lib/config_supabase.dart` (o `--dart-define`);
+  v5; `uidAutor` desde v3). Las credenciales van en `lib/config_supabase.dart` (o `--dart-define`);
   el bucket público `articulos` y sus políticas se configuran según
   `SUPABASE_SETUP.md`. Firebase Storage no se usa (Blaze no se pudo activar).
   El build de release necesita el permiso `INTERNET` en
@@ -96,7 +107,10 @@ Pantallas --context.watch/read--> ArticulosProvider (ChangeNotifier)
   `databaseFactory = databaseFactoryFfi` en `setUpAll`, y borra la BD en cada
   `setUp` con `BaseDatos.instancia.eliminar()`.
 - Tests de provider y widgets usan `ArticuloRepositorioMemoria` (SQLite no
-  corre en el entorno de test sin ffi).
+  corre en el entorno de test sin ffi) y `PerfilRepositorioMemoria`.
+- `PantallaDetalleArticulo` acepta `lanzador:`; las pruebas usan un
+  `LanzadorWhatsapp` falso. Las URLs puras se prueban en
+  `test/lanzador_whatsapp_test.dart`.
 - La lógica de visión se prueba sin ML Kit:
   `sugeridor_publicacion_test.dart`, `generador_descripcion_test.dart` y
   `panel_sugerencias_test.dart`. La parte LLM se prueba con `MockClient` en

@@ -15,6 +15,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 
 import '../estado/articulos_provider.dart';
+import '../estado/perfil_provider.dart';
 import '../modelos/articulo.dart';
 import '../modelos/categoria.dart';
 import '../widgets/campo_busqueda.dart';
@@ -26,8 +27,65 @@ import 'pantalla_detalle_articulo.dart';
 import 'pantalla_perfil.dart';
 
 /// Pantalla de Inicio (pestaña "Inicio" de la barra inferior).
-class PantallaInicio extends StatelessWidget {
+class PantallaInicio extends StatefulWidget {
   const PantallaInicio({super.key});
+
+  @override
+  State<PantallaInicio> createState() => _PantallaInicioState();
+}
+
+class _PantallaInicioState extends State<PantallaInicio> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _cargarNovedades());
+  }
+
+  /// Consulta sugerencias según las preferencias guardadas en el perfil.
+  Future<void> _cargarNovedades() async {
+    final PerfilProvider perfil = context.read<PerfilProvider>();
+    await context.read<ArticulosProvider>().cargarNovedades(
+          activas: perfil.sugerenciasActivas,
+          categorias: perfil.categoriasSugerencias,
+          desde: perfil.ultimaVista,
+        );
+  }
+
+  /// Muestra la bandeja de sugerencias y la marca como vista.
+  Future<void> _mostrarNovedades(
+    BuildContext context,
+    ArticulosProvider proveedor,
+  ) async {
+    await context.read<PerfilProvider>().marcarVisto();
+    if (!context.mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (BuildContext contexto) => SafeArea(
+        child: ListView.builder(
+          itemCount: proveedor.novedades.length,
+          itemBuilder: (BuildContext _, int indice) {
+            final Articulo articulo = proveedor.novedades[indice];
+            return ListTile(
+              leading: Icon(articulo.categoria.icono),
+              title: Text(articulo.titulo),
+              subtitle: Text(articulo.precioTexto),
+              onTap: () {
+                Navigator.of(contexto).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) =>
+                        PantallaDetalleArticulo(articulo: articulo),
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      ),
+    );
+    if (!context.mounted) return;
+    await _cargarNovedades();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -131,6 +189,25 @@ class PantallaInicio extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 18),
+
+          // ---------------------- Sugerencias in-app --------------------
+          if (proveedor.hayNovedades)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Card(
+                color: tema.colorScheme.primaryContainer,
+                child: ListTile(
+                  leading: const Icon(Icons.new_releases_outlined),
+                  title: Text(
+                    '${proveedor.novedades.length} novedades para ti',
+                  ),
+                  subtitle: const Text('Toca para verlas'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _mostrarNovedades(context, proveedor),
+                ),
+              ),
+            ),
+          if (proveedor.hayNovedades) const SizedBox(height: 12),
 
           // ----------------------- Título de sección --------------------
           Padding(

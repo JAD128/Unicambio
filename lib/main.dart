@@ -20,7 +20,10 @@ import 'datos/articulo_repositorio.dart';
 import 'datos/articulo_repositorio_memoria.dart';
 import 'datos/articulo_repositorio_nube.dart';
 import 'datos/articulos_ejemplo.dart';
+import 'datos/perfil_repositorio.dart';
+import 'datos/perfil_repositorio_nube.dart';
 import 'estado/articulos_provider.dart';
+import 'estado/perfil_provider.dart';
 import 'firebase_options.dart';
 import 'pantallas/pantalla_autenticacion.dart';
 import 'pantallas/pantalla_favoritos.dart';
@@ -52,14 +55,23 @@ Future<void> main() async {
   // se usa la lista en memoria para que la interfaz siga siendo navegable.
   final ArticuloRepositorio repositorio =
       errorFirebase == null ? ArticuloRepositorioNube() : ArticuloRepositorioMemoria(iniciales: articulosEjemplo);
+  final PerfilRepositorio repositorioPerfil = errorFirebase == null
+      ? PerfilRepositorioNube()
+      : PerfilRepositorioMemoria();
   final ArticulosProvider proveedorArticulos = ArticulosProvider(repositorio);
+  final PerfilProvider proveedorPerfil = PerfilProvider(repositorioPerfil);
   // Carga inicial sin bloquear el arranque: la puerta de autenticación
   // vuelve a cargar los datos cuando ya hay sesión en Firestore.
   proveedorArticulos.iniciar();
 
   runApp(
-    ChangeNotifierProvider<ArticulosProvider>.value(
-      value: proveedorArticulos,
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<ArticulosProvider>.value(
+          value: proveedorArticulos,
+        ),
+        ChangeNotifierProvider<PerfilProvider>.value(value: proveedorPerfil),
+      ],
       child: UniCambioApp(errorFirebase: errorFirebase),
     ),
   );
@@ -120,19 +132,35 @@ class _PuertaAutenticacionState extends State<_PuertaAutenticacion> {
           }
           final User? usuario = estado.data;
           if (usuario == null) {
-            _uidCargado = null;
+            if (_uidCargado != null) {
+              _uidCargado = null;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) context.read<PerfilProvider>().limpiar();
+              });
+            }
             return const PantallaAutenticacion();
           }
           if (usuario.uid != _uidCargado) {
             _uidCargado = usuario.uid;
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (!mounted) return;
-              context.read<ArticulosProvider>().configurarUsuario(
-                    uid: usuario.uid,
-                    nombre: usuario.displayName,
-                    correo: usuario.email,
-                  );
-              context.read<ArticulosProvider>().iniciar();
+              final ArticulosProvider articulos =
+                  context.read<ArticulosProvider>();
+              final PerfilProvider perfil = context.read<PerfilProvider>();
+              articulos.configurarUsuario(
+                uid: usuario.uid,
+                nombre: usuario.displayName,
+                correo: usuario.email,
+              );
+              articulos.iniciar();
+              perfil.iniciar(usuario.uid).then((_) {
+                if (!mounted) return;
+                articulos.cargarNovedades(
+                  activas: perfil.sugerenciasActivas,
+                  categorias: perfil.categoriasSugerencias,
+                  desde: perfil.ultimaVista,
+                );
+              });
             });
           }
           return const PantallaPrincipal();
