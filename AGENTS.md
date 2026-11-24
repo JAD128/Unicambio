@@ -174,8 +174,8 @@ Pantallas --context.watch/read--> ArticulosProvider (ChangeNotifier)
   `codemagic.yaml` los copia en `Runner.app` después del build y
   `scripts/configure_ios_mlkit.rb` registra `GoogleService-Info.plist` con
    `xcodeproj`.
-- El logo definitivo debe reemplazar `assets/logo/unicambio.png` y
-  `assets/logo/unicambio_foreground.png`; luego ejecutar
+- El logo definitivo ya está en `assets/logo/unicambio.png` y
+  `assets/logo/unicambio_foreground.png`. Si se cambia, ejecutar
   `dart run flutter_launcher_icons` y `dart run flutter_native_splash:create`.
 - Deuda técnica consciente: la búsqueda en Firestore es en memoria (no hay
 

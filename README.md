@@ -251,7 +251,7 @@ Al actualizar este README, las verificaciones reportaron **No issues
 found!** y **All tests passed!** (95 pruebas). También compilan
 `flutter build apk --debug` y `flutter build web`.
 
-El logo provisional está en `assets/logo/`. Para usar el logo definitivo,
+El logo definitivo está en `assets/logo/`. Si vuelve a cambiar,
 reemplaza `assets/logo/unicambio.png` (imagen completa) y
 `assets/logo/unicambio_foreground.png` (solo el símbolo sobre fondo transparente),
 y vuelve a ejecutar `dart run flutter_launcher_icons` y

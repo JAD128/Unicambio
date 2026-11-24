@@ -986,9 +986,9 @@ Verificación final: `flutter analyze` → `No issues found!`, `flutter test` �
   `ColorScheme` en vez de `Colors.green/red/teal` sueltos.
 - Branding: nuevas dependencias dev `flutter_launcher_icons 0.14.4` y
   `flutter_native_splash 2.4.8`; configuración en `flutter_launcher_icons.yaml`
-  y `flutter_native_splash.yaml`. El logo actual es **provisional**: el
-  definitivo debe reemplazar `assets/logo/unicambio.png` e
-  `assets/logo/unicambio_foreground.png`, y luego ejecutar
+  y `flutter_native_splash.yaml`. El logo actual es el **definitivo** del
+  usuario, en `assets/logo/unicambio.png` e
+  `assets/logo/unicambio_foreground.png`; si se cambia, ejecutar
   `dart run flutter_launcher_icons` y `dart run flutter_native_splash:create`.
   En iOS se usa `remove_alpha_ios: true` para cumplir con App Store.
 - No se agregaron FCM/APNs, SMS ni chat: siguen fuera de alcance.
@@ -996,5 +996,5 @@ Verificación final: `flutter analyze` → `No issues found!`, `flutter test` �
 - Verificación final: `flutter pub get`, `flutter analyze` → `No issues found!`,
   `flutter test` → `All tests passed!` (95), `flutter build apk --debug` y
   `flutter build web` correctos, `git diff --check` sin errores (solo avisos
-  LF→CRLF de Windows). Falta regenerar el IPA con Codemagic cuando llegue el
-  logo definitivo.
+  LF→CRLF de Windows). Falta regenerar el IPA con Codemagic con el logo
+  definitivo ya integrado.
